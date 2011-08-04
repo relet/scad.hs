@@ -11,7 +11,7 @@ data Node =
   | MultMatrix [[Double]] Node 
   | Color (Int, Int, Int, Int) Node 
   | Minkowski [Node]
-  | Hull [Node] 
+  | Hull Node 
 --  | Render [Node] 
   | Group [Node]
 -- primitives 
@@ -56,8 +56,6 @@ group a b         = Group [a,b]
 (/.)             :: Node -> Node -> Node
 (Group l) /. b    = Group (l++[b])
 a /. b            = Group [a,b]
-hull             :: Node -> Node -> Node
-hull a b          = Hull [a,b]
 mink             :: Node -> Node -> Node
 mink a b          = Minkowski [a,b]
 
@@ -79,6 +77,8 @@ trans            :: (Double, Double, Double) -> Node -> Node
 trans (x, y,z) n  = Translate (x,y,z) n
 mirror           :: (Double, Double, Double) -> Node -> Node
 mirror (x, y,z) n = Mirror (x,y,z) n
+hull             :: Node -> Node
+hull a            = Hull a
 
 showFnFaFs fn fa fs = if fn > 0 then ", $fn=" ++ (show fn) else 
                                 (if fa /= defaultFa then ", $fa=" ++ (show fa) else "") 
@@ -107,18 +107,18 @@ instance Show Node where
 
   show (Polyhedron p t)    = "polyhedron(points = " ++ (show p) ++ ", triangles = " ++ (show t) ++ ");"
 
-  show (Union kids)        = "union () {\n" ++ (showKids kids) ++"\n}"
-  show (Difference kids)   = "difference () {\n" ++ (showKids kids) ++"\n}"
-  show (Intersection kids) = "intersection () {\n" ++ (showKids kids) ++"\n}"
-  show (Group kids)        = "{\n" ++ (showKids kids) ++"\n}"
-  show (Minkowski kids)    = "minkowski () {\n" ++ (showKids kids) ++"\n}"
-  show (Hull kids)         = "hull () {\n" ++ (showKids kids) ++"\n}"
+  show (Union kids)        = "union () {\n" ++ (showKids kids) ++"}"
+  show (Difference kids)   = "difference () {\n" ++ (showKids kids) ++"}"
+  show (Intersection kids) = "intersection () {\n" ++ (showKids kids) ++"}"
+  show (Group kids)        = "{\n" ++ (showKids kids) ++"}"
+  show (Minkowski kids)    = "minkowski () {\n" ++ (showKids kids) ++"}"
 
-  show (Scale (x,y,z) kid)     = "scale (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n}"
-  show (Mirror (x,y,z) kid)    = "mirror (" ++ (showVector x y z) ++ ") {\n" ++ (show kid) ++ "\n}"
-  show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector x y z) ++ ") {\n" ++ (show kid) ++ "\n}"
-  show (Translate (x,y,z) kid) = "translate (" ++ (showVector x y z) ++ ") {\n" ++ (show kid) ++ "\n}"
-  show (Color (r,g,b,a) kid)   = "color (" ++ (showVector4 r g b a) ++ ") {\n" ++ (show kid) ++ "\n}"
+  show (Scale (x,y,z) kid)     = "scale (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
+  show (Mirror (x,y,z) kid)    = "mirror (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
+  show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
+  show (Translate (x,y,z) kid) = "translate (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
+  show (Color (r,g,b,a) kid)   = "color (" ++ (showVector4 r g b a) ++ ") \n" ++ (show kid) ++ "\n"
+  show (Hull kid)              = "hull () \n" ++ (show kid) ++ "\n"
 
   show (MultMatrix m kid)   = "multmatrix (" ++ (show m) ++ ") {\n" ++ (show kid) ++ "\n}"
 
