@@ -1,0 +1,9 @@
+== Using Scad.hs ==
+
+scad.hs provides a node hierarchy for constructive solid geometry. The main data type is a Node, which represents either a primitive geometry or an operation on other nodes. 
+
+Currently, any node hierarchy can be rendered into OpenScad code using the "show" function. Eventually, the objective would be to interface directly with OpenSCAD/CGAL to create CGAL geometries and render to STL and other formats.
+
+(C) 2011 Thomas Hirsch - Public domain
+
+
