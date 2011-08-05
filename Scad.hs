@@ -1,5 +1,4 @@
 module Scad where
-import Scad2D (Node2D, projection)
 
 data Node =  
     Union [Node]
@@ -13,17 +12,21 @@ data Node =
   | Color (Int, Int, Int, Int) Node 
   | Minkowski [Node]
   | Hull Node
-  | Extrude {h :: Double, center :: Bool, twist :: Double, node :: Node2D, fn :: Int, fa :: Double, fs :: Double} 
+  | Extrude {h :: Double, center :: Bool, twist :: Double, node :: Node, fn :: Int, fa :: Double, fs :: Double} 
   | DXFExtrude {h :: Double, center :: Bool, twist :: Double, file :: String, layer :: String, fn :: Int, fa :: Double, fs :: Double} 
-  | RotateExtrude {node :: Node2D, fn :: Int, fa :: Double, fs :: Double} 
+  | RotateExtrude {node :: Node, fn :: Int, fa :: Double, fs :: Double} 
   | DXFRotateExtrude {file :: String, layer :: String, fn :: Int, fa :: Double, fs :: Double} 
---  | Render [Node] 
   | Group [Node]
 -- primitives 
   | Sphere {r :: Double, fn :: Int, fa :: Double, fs :: Double}
   | Cylinder {r :: Double, r2 :: Double, h :: Double, center :: Bool, fn :: Int, fa :: Double, fs :: Double} 
-  | Cube {size :: (Double, Double, Double), center :: Bool}
+  | Cube {size :: [Double], center :: Bool}
   | Polyhedron {points :: [[Double]], triangles :: [[Int]]}
+-- 2D
+  | Circle {r :: Double}
+  | Polygon {points :: [[Double]], paths :: [[Int]]}
+  | Square {size :: [Double], center :: Bool}
+  | Projection Bool Node 
   deriving (Eq, Ord)
 
 defaultFa :: Double
@@ -32,7 +35,7 @@ defaultFs :: Double
 defaultFs  = 1
 
 cube     :: Node
-cube      = Cube { size = (1,1,1), center=False }
+cube      = Cube { size = [1,1,1], center=False }
 cylinder :: Node
 cylinder  = Cylinder { r = 1, r2 = 1, h = 1, center=False, fn = 0, fa = defaultFa, fs = defaultFs }
 sphere   :: Node
@@ -40,6 +43,14 @@ sphere    = Sphere { r = 1, fn = 0, fa = defaultFa, fs = defaultFs }
 poly     :: Node
 poly      = Polyhedron { points    = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]], 
                          triangles = [[0,1,2],[1,0,3],[0,2,3],[2,1,3]] }
+
+circle  :: Node
+circle   = Circle {r = 1}
+polygon :: Node
+polygon  = Polygon {points = [[0,0],[0,1],[1,0]], paths = [[0,1],[1,2],[2,0]]}
+square  :: Node
+square   = Square {size=[1,1], center = False}
+
 
 union            :: Node -> Node -> Node
 union (Union a) (Union b) = Union (a++b)
@@ -90,17 +101,17 @@ mirror (x, y,z) n = Mirror (x,y,z) n
 hull             :: Node -> Node
 hull a            = Hull a
 
-extrude          :: Node2D -> Double -> Node
-extrude n2 h      = Extrude {node = n2, h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
+extrude          :: Node -> Double -> Node
+extrude n2 h = Extrude {node = n2, h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
 dxf              :: String -> Double -> Node
 dxf file h        = DXFExtrude {file = file, layer = "", h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
-rotateExtrude    :: Node2D -> Node
+rotateExtrude    :: Node -> Node
 rotateExtrude n2  = RotateExtrude {node = n2, fn = 0, fa = defaultFa, fs = defaultFs}
 dxfRotate        :: String -> Node
 dxfRotate file    = DXFRotateExtrude {file = file, layer = "", fn = 0, fa = defaultFa, fs = defaultFs}
 
-project :: Bool -> Node -> Node2D
-project cut n = projection cut (show n)
+project :: Bool -> Node -> Node
+project cut n = Projection cut n
 
 showFnFaFs fn fa fs = if fn > 0 then ", $fn=" ++ (show fn) else 
                                 (if fa /= defaultFa then ", $fa=" ++ (show fa) else "") 
@@ -111,6 +122,8 @@ showVector x y z    = "["++ (show x) ++ ", " ++ (show y) ++ ", " ++ (show z) ++"
 showVector4 x y z a = "["++ (show x) ++ ", " ++ (show y) ++ ", " ++ (show z) ++ ", " ++ (show a) ++"]"
 showLayer  l        = if l /= "" then ", layer=" ++ (show l) else ""
 showTwist  t        = if t /= 0  then ", twist=" ++ (show t) else ""
+showBool b          = if b then "true" else "false"
+
 
 instance Show Node where
   show (Sphere r fn fa fs) = "sphere(r=" ++ (show r) 
@@ -125,7 +138,7 @@ instance Show Node where
                           ++ (showCenter c)
                           ++ ");"
 
-  show (Cube (w, h, d) c)  = "cube(" ++ (showVector w h d) 
+  show (Cube s c)  = "cube(" ++ (show s) 
                           ++ (showCenter c)
                           ++ ");"
 
@@ -142,7 +155,7 @@ instance Show Node where
   show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
   show (Translate (x,y,z) kid) = "translate (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
   show (Color (r,g,b,a) kid)   = "color (" ++ (showVector4 r g b a) ++ ")\n" ++ (show kid) ++ "\n"
-  show (Hull kid)              = "hull ()\n" ++ (show kid) ++ "\n"
+  show (Hull kid)              = "hull () " ++ (show kid) ++ "\n"
 
   show (MultMatrix m kid)      = "multmatrix (" ++ (show m) ++ ") {\n" ++ (show kid) ++ "\n}"
   show (Extrude h c t kid fn fa fs) = "linear_extrude (height=" ++ (show h) ++ (showTwist t)
@@ -157,4 +170,9 @@ instance Show Node where
   show (DXFRotateExtrude file layer fn fa fs) = "rotate_extrude (" 
                                    ++ (showFnFaFs fn fa fs) 
                                    ++ ", file=" ++ (show file) ++ (showLayer layer) ++");"
+  show (Circle r) = "circle(r=" ++ (show r) ++ ");"
+  show (Square s c) = "square(" ++ (show s) ++ (showCenter c) ++ ");"
+  show (Polygon p l) = "polygon(points = " ++ (show p) ++ ", paths = " ++ (show l) ++ ");"
+
+  show (Projection c kid) = "projection (cut = "++(showBool c)++")\n" ++ (show kid)
 
