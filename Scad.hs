@@ -103,8 +103,8 @@ hull a            = Hull a
 
 extrude          :: Double -> Node -> Node
 extrude h n2      = Extrude {node = n2, h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
-dxf              :: String -> Double -> Node
-dxf file h        = DXFExtrude {file = file, layer = "", h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
+dxf              :: Double -> String -> Node
+dxf h file        = DXFExtrude {file = file, layer = "", h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
 rotateExtrude    :: Node -> Node
 rotateExtrude n2  = RotateExtrude {node = n2, fn = 0, fa = defaultFa, fs = defaultFs}
 dxfRotate        :: String -> Node
