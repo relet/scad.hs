@@ -34,23 +34,34 @@ defaultFa  = 12
 defaultFs :: Double
 defaultFs  = 1
 
-cube     :: Node
-cube      = Cube { size = [1,1,1], center=False }
-cylinder :: Node
-cylinder  = Cylinder { r = 1, r2 = 1, h = 1, center=False, fn = 0, fa = defaultFa, fs = defaultFs }
-sphere   :: Node
-sphere    = Sphere { r = 1, fn = 0, fa = defaultFa, fs = defaultFs }
+uCube     :: Node
+uCube      = Cube { size = [1,1,1], center=False }
+uCylinder :: Node
+uCylinder  = Cylinder { r = 1, r2 = 1, h = 1, center=False, fn = 0, fa = defaultFa, fs = defaultFs }
+uSphere   :: Node
+uSphere    = Sphere { r = 1, fn = 0, fa = defaultFa, fs = defaultFs }
 poly     :: Node
 poly      = Polyhedron { points    = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]], 
                          triangles = [[0,1,2],[1,0,3],[0,2,3],[2,1,3]] }
+cube         :: [Double] -> Node
+cube s        = uCube {size = s}
+cylinder     :: Double -> Double -> Node
+cylinder r h  = uCylinder {r = r, r2 = r, h = h}
+cone         :: Double -> Double -> Double -> Node
+cone r1 r2 h  = uCylinder {r = r1, r2 = r2, h = h}
+sphere       :: Double -> Node
+sphere r      = uSphere {r = r}
 
-circle  :: Node
-circle   = Circle {r = 1}
+uCircle  :: Node
+uCircle   = Circle {r = 1}
 polygon :: Node
 polygon  = Polygon {points = [[0,0],[0,1],[1,0]], paths = [[0,1],[1,2],[2,0]]}
-square  :: Node
-square   = Square {size=[1,1], center = False}
-
+uSquare :: Node
+uSquare   = Square {size=[1,1], center = False}
+square  :: [Double] -> Node
+square s = uSquare {size=s}
+circle  :: Double -> Node
+circle r = uCircle {r = r}
 
 union            :: Node -> Node -> Node
 union (Union a) (Union b) = Union (a++b)
