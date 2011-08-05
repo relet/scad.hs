@@ -56,9 +56,8 @@ sphere r      = uSphere {r = r}
 enlist       :: (Num a) => a -> a -> [a]
 enlist a b    = [a,b]
 line         :: (Double -> [Double]) -> Int -> Node
-line fgen dt  = Polygon { points = map fgen t, paths = zipWith enlist seq (tail seq ++ [0]) }
+line fgen dt  = Polygon { points = map fgen t, paths = [[0..(dt-1)]++[0]] }
                 where t   = [0.0,1.0/(fromIntegral (dt-1))..1.0]
-                      seq = [0..dt]
 
 plane           :: (Double -> Double -> [Double]) -> Int -> Int -> Node
 plane fgen dt du = Polyhedron { points = foldl (++) [] $ map (\x-> map (fgen x) u) t,
@@ -73,7 +72,7 @@ plane fgen dt du = Polyhedron { points = foldl (++) [] $ map (\x-> map (fgen x) 
 uCircle  :: Node
 uCircle   = Circle {r = 1}
 polygon :: Node
-polygon  = Polygon {points = [[0,0],[0,1],[1,0]], paths = [[0,1],[1,2],[2,0]]}
+polygon  = Polygon {points = [[0,0],[0,1],[1,0]], paths = [[0..2]]}
 uSquare :: Node
 uSquare   = Square {size=[1,1], center = False}
 square  :: [Double] -> Node
@@ -206,7 +205,7 @@ instance Show Node where
                                    ++ ", file=" ++ (show file) ++ (showLayer layer) ++");"
   show (Circle r) = "circle(r=" ++ (show r) ++ ");"
   show (Square s c) = "square(" ++ (show s) ++ (showCenter c) ++ ");"
-  show (Polygon p l) = "polygon(points = " ++ (showVector' p) ++ ", paths = " ++ (show l) ++ ");"
+  show (Polygon p l) = "polygon(points = " ++ (showVector' p)  ++ ", paths = " ++ (show l) ++ ");"
 
   show (Projection c kid) = "projection (cut = "++(showBool c)++")\n" ++ (show kid)
 
