@@ -101,8 +101,8 @@ mirror (x, y,z) n = Mirror (x,y,z) n
 hull             :: Node -> Node
 hull a            = Hull a
 
-extrude          :: Node -> Double -> Node
-extrude n2 h = Extrude {node = n2, h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
+extrude          :: Double -> Node -> Node
+extrude h n2      = Extrude {node = n2, h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
 dxf              :: String -> Double -> Node
 dxf file h        = DXFExtrude {file = file, layer = "", h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
 rotateExtrude    :: Node -> Node
