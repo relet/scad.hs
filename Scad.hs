@@ -1,4 +1,5 @@
 module Scad where
+import Scad2D (Node2D, projection)
 
 data Node =  
     Union [Node]
@@ -11,7 +12,11 @@ data Node =
   | MultMatrix [[Double]] Node 
   | Color (Int, Int, Int, Int) Node 
   | Minkowski [Node]
-  | Hull Node 
+  | Hull Node
+  | Extrude {h :: Double, center :: Bool, twist :: Double, node :: Node2D, fn :: Int, fa :: Double, fs :: Double} 
+  | DXFExtrude {h :: Double, center :: Bool, twist :: Double, file :: String, layer :: String, fn :: Int, fa :: Double, fs :: Double} 
+  | RotateExtrude {node :: Node2D, fn :: Int, fa :: Double, fs :: Double} 
+  | DXFRotateExtrude {file :: String, layer :: String, fn :: Int, fa :: Double, fs :: Double} 
 --  | Render [Node] 
   | Group [Node]
 -- primitives 
@@ -37,13 +42,15 @@ poly      = Polyhedron { points    = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]],
                          triangles = [[0,1,2],[1,0,3],[0,2,3],[2,1,3]] }
 
 union            :: Node -> Node -> Node
-union (Union l) b = Union (l++[b])
+union (Union a) (Union b) = Union (a++b)
+union (Union a) b = Union (a++[b])
 union a b         = Union [a,b]
 (/+)             :: Node -> Node -> Node
-(Union l) /+ b    = Union (l++[b])
+(Union a) /+ (Union b) = Union (a++b)
+(Union a) /+ b    = Union (a++[b])
 a /+ b            = Union [a,b]
 diff             :: Node -> Node -> Node
-diff (Difference l) b  = Difference (l++[b])
+diff (Difference a) b  = Difference (a++[b])
 diff a b               = Difference [a,b]
 (/-)             :: Node -> Node -> Node
 (Difference l) /- b    = Difference (l++[b])
@@ -71,14 +78,29 @@ scale            :: (Double, Double, Double) -> Node -> Node
 scale (x,y,z) n   = Scale (x,y,z) n
 (/*)              :: Node -> Double -> Node
 n /* x             = Scale (x,x,x) n
+(//)             :: Node -> (Double, Double, Double) -> Node
+n // (x,y,z)       = Scale (x,y,z) n
 rot              :: (Double, Double, Double) -> Node -> Node
 rot (x,y,z) n     = Rotate (x,y,z) n
 trans            :: (Double, Double, Double) -> Node -> Node
 trans (x, y,z) n  = Translate (x,y,z) n
 mirror           :: (Double, Double, Double) -> Node -> Node
 mirror (x, y,z) n = Mirror (x,y,z) n
+
 hull             :: Node -> Node
 hull a            = Hull a
+
+extrude          :: Node2D -> Double -> Node
+extrude n2 h      = Extrude {node = n2, h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
+dxf              :: String -> Double -> Node
+dxf file h        = DXFExtrude {file = file, layer = "", h = h, center = False, twist = 0, fn = 0, fa = defaultFa, fs = defaultFs}
+rotateExtrude    :: Node2D -> Node
+rotateExtrude n2  = RotateExtrude {node = n2, fn = 0, fa = defaultFa, fs = defaultFs}
+dxfRotate        :: String -> Node
+dxfRotate file    = DXFRotateExtrude {file = file, layer = "", fn = 0, fa = defaultFa, fs = defaultFs}
+
+project :: Bool -> Node -> Node2D
+project cut n = projection cut (show n)
 
 showFnFaFs fn fa fs = if fn > 0 then ", $fn=" ++ (show fn) else 
                                 (if fa /= defaultFa then ", $fa=" ++ (show fa) else "") 
@@ -87,6 +109,8 @@ showCenter c        = if c then ", center=true" else ""
 showKids   k        = foldl (\c -> \line -> c ++ line ++ "\n") "" (map show k) 
 showVector x y z    = "["++ (show x) ++ ", " ++ (show y) ++ ", " ++ (show z) ++"]"
 showVector4 x y z a = "["++ (show x) ++ ", " ++ (show y) ++ ", " ++ (show z) ++ ", " ++ (show a) ++"]"
+showLayer  l        = if l /= "" then ", layer=" ++ (show l) else ""
+showTwist  t        = if t /= 0  then ", twist=" ++ (show t) else ""
 
 instance Show Node where
   show (Sphere r fn fa fs) = "sphere(r=" ++ (show r) 
@@ -113,12 +137,24 @@ instance Show Node where
   show (Group kids)        = "{\n" ++ (showKids kids) ++"}"
   show (Minkowski kids)    = "minkowski () {\n" ++ (showKids kids) ++"}"
 
-  show (Scale (x,y,z) kid)     = "scale (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
-  show (Mirror (x,y,z) kid)    = "mirror (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
-  show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
-  show (Translate (x,y,z) kid) = "translate (" ++ (showVector x y z) ++ ") \n" ++ (show kid) ++ "\n"
-  show (Color (r,g,b,a) kid)   = "color (" ++ (showVector4 r g b a) ++ ") \n" ++ (show kid) ++ "\n"
-  show (Hull kid)              = "hull () \n" ++ (show kid) ++ "\n"
+  show (Scale (x,y,z) kid)     = "scale (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Mirror (x,y,z) kid)    = "mirror (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Translate (x,y,z) kid) = "translate (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Color (r,g,b,a) kid)   = "color (" ++ (showVector4 r g b a) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Hull kid)              = "hull ()\n" ++ (show kid) ++ "\n"
 
-  show (MultMatrix m kid)   = "multmatrix (" ++ (show m) ++ ") {\n" ++ (show kid) ++ "\n}"
+  show (MultMatrix m kid)      = "multmatrix (" ++ (show m) ++ ") {\n" ++ (show kid) ++ "\n}"
+  show (Extrude h c t kid fn fa fs) = "linear_extrude (height=" ++ (show h) ++ (showTwist t)
+                                   ++ (showCenter c) ++ (showFnFaFs fn fa fs) 
+                                   ++ ")\n" ++ (show kid) ++ "\n"
+  show (RotateExtrude kid fn fa fs) = "rotate_extrude (" 
+                                   ++ (showFnFaFs fn fa fs) 
+                                   ++ ")\n" ++ (show kid) ++ "\n"
+  show (DXFExtrude h c t file layer fn fa fs) = "linear_extrude (height=" ++ (show h) ++ (showTwist t)
+                                   ++ (showCenter c) ++ (showFnFaFs fn fa fs) 
+                                   ++ ", file=" ++ (show file) ++ (showLayer layer) ++");"
+  show (DXFRotateExtrude file layer fn fa fs) = "rotate_extrude (" 
+                                   ++ (showFnFaFs fn fa fs) 
+                                   ++ ", file=" ++ (show file) ++ (showLayer layer) ++");"
 
