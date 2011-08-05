@@ -1,4 +1,5 @@
 module Scad where
+import Text.Printf (printf, PrintfType, PrintfArg)
 
 data Node =  
     Union [Node]
@@ -40,9 +41,9 @@ uCylinder :: Node
 uCylinder  = Cylinder { r = 1, r2 = 1, h = 1, center=False, fn = 0, fa = defaultFa, fs = defaultFs }
 uSphere   :: Node
 uSphere    = Sphere { r = 1, fn = 0, fa = defaultFa, fs = defaultFs }
-poly     :: Node
-poly      = Polyhedron { points    = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]], 
-                         triangles = [[0,1,2],[1,0,3],[0,2,3],[2,1,3]] }
+poly      :: Node
+poly       = Polyhedron { points    = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]], 
+                          triangles = [[0,1,2],[1,0,3],[0,2,3],[2,1,3]] }
 cube         :: [Double] -> Node
 cube s        = uCube {size = s}
 cylinder     :: Double -> Double -> Node
@@ -51,6 +52,23 @@ cone         :: Double -> Double -> Double -> Node
 cone r1 r2 h  = uCylinder {r = r1, r2 = r2, h = h}
 sphere       :: Double -> Node
 sphere r      = uSphere {r = r}
+
+enlist       :: (Num a) => a -> a -> [a]
+enlist a b    = [a,b]
+line         :: (Double -> [Double]) -> Int -> Node
+line fgen dt  = Polygon { points = map fgen t, paths = zipWith enlist seq (tail seq ++ [0]) }
+                where t   = [0.0,1.0/(fromIntegral (dt-1))..1.0]
+                      seq = [0..dt]
+
+plane           :: (Double -> Double -> [Double]) -> Int -> Int -> Node
+plane fgen dt du = Polyhedron { points = foldl (++) [] $ map (\x-> map (fgen x) u) t,
+                                triangles = foldl (++) [] [[[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]] | i<-[0..length seq1 -1]] }
+                where t = [0.0,1.0/(fromIntegral (dt-1))..1.0]
+                      u = [0.0,1.0/(fromIntegral (du-1))..1.0]
+                      seq1 = [u * dt + t | u<-[0..dt-1], t<-[0..du-1]]
+                      seq2 = tail seq1 ++ [0]
+                      seq3 = drop du seq1 ++ (take du seq1) 
+                      seq4 = map ((`mod`(dt*du)).(+dt)) seq2
 
 uCircle  :: Node
 uCircle   = Circle {r = 1}
@@ -129,8 +147,13 @@ showFnFaFs fn fa fs = if fn > 0 then ", $fn=" ++ (show fn) else
                              ++ (if fs /= defaultFs then ", $fs=" ++ (show fs) else "")
 showCenter c        = if c then ", center=true" else ""
 showKids   k        = foldl (\c -> \line -> c ++ line ++ "\n") "" (map show k) 
-showVector x y z    = "["++ (show x) ++ ", " ++ (show y) ++ ", " ++ (show z) ++"]"
-showVector4 x y z a = "["++ (show x) ++ ", " ++ (show y) ++ ", " ++ (show z) ++ ", " ++ (show a) ++"]"
+
+showDouble         :: Double -> String
+showDouble f        = printf "%.3f" f
+showVector         :: [Double] -> String
+showVector x        = "[" ++ (foldl1 (\x-> \y-> x ++ "," ++ y) (map showDouble x)) ++ "]"
+showVector'        :: [[Double]] -> String
+showVector' x       = "[" ++ (foldl1 (\x-> \y-> x ++ "," ++ y) (map showVector x)) ++ "]"
 showLayer  l        = if l /= "" then ", layer=" ++ (show l) else ""
 showTwist  t        = if t /= 0  then ", twist=" ++ (show t) else ""
 showBool b          = if b then "true" else "false"
@@ -153,7 +176,7 @@ instance Show Node where
                           ++ (showCenter c)
                           ++ ");"
 
-  show (Polyhedron p t)    = "polyhedron(points = " ++ (show p) ++ ", triangles = " ++ (show t) ++ ");"
+  show (Polyhedron p t)    = "polyhedron(points = " ++ (showVector' p) ++ ", triangles = " ++ (show t) ++ ");"
 
   show (Union kids)        = "union () {\n" ++ (showKids kids) ++"}"
   show (Difference kids)   = "difference () {\n" ++ (showKids kids) ++"}"
@@ -161,11 +184,11 @@ instance Show Node where
   show (Group kids)        = "{\n" ++ (showKids kids) ++"}"
   show (Minkowski kids)    = "minkowski () {\n" ++ (showKids kids) ++"}"
 
-  show (Scale (x,y,z) kid)     = "scale (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
-  show (Mirror (x,y,z) kid)    = "mirror (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
-  show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
-  show (Translate (x,y,z) kid) = "translate (" ++ (showVector x y z) ++ ")\n" ++ (show kid) ++ "\n"
-  show (Color (r,g,b,a) kid)   = "color (" ++ (showVector4 r g b a) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Scale (x,y,z) kid)     = "scale (" ++ (showVector [x, y, z]) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Mirror (x,y,z) kid)    = "mirror (" ++ (showVector [x, y, z]) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Rotate (x,y,z) kid)    = "rotate (" ++ (showVector [x, y, z]) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Translate (x,y,z) kid) = "translate (" ++ (showVector [x, y, z]) ++ ")\n" ++ (show kid) ++ "\n"
+  show (Color (r,g,b,a) kid)   = "color (" ++ (show [r, g, b, a]) ++ ")\n" ++ (show kid) ++ "\n"
   show (Hull kid)              = "hull () " ++ (show kid) ++ "\n"
 
   show (MultMatrix m kid)      = "multmatrix (" ++ (show m) ++ ") {\n" ++ (show kid) ++ "\n}"
@@ -183,7 +206,7 @@ instance Show Node where
                                    ++ ", file=" ++ (show file) ++ (showLayer layer) ++");"
   show (Circle r) = "circle(r=" ++ (show r) ++ ");"
   show (Square s c) = "square(" ++ (show s) ++ (showCenter c) ++ ");"
-  show (Polygon p l) = "polygon(points = " ++ (show p) ++ ", paths = " ++ (show l) ++ ");"
+  show (Polygon p l) = "polygon(points = " ++ (showVector' p) ++ ", paths = " ++ (show l) ++ ");"
 
   show (Projection c kid) = "projection (cut = "++(showBool c)++")\n" ++ (show kid)
 
