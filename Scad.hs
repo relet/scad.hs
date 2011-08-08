@@ -17,6 +17,7 @@ data Node =
   | DXFExtrude {h :: Double, center :: Bool, twist :: Double, file :: String, layer :: String, fn :: Int, fa :: Double, fs :: Double} 
   | RotateExtrude {node :: Node, fn :: Int, fa :: Double, fs :: Double} 
   | DXFRotateExtrude {file :: String, layer :: String, fn :: Int, fa :: Double, fs :: Double} 
+  | STLImport {file :: String} 
   | Group [Node]
 -- primitives 
   | Sphere {r :: Double, fn :: Int, fa :: Double, fs :: Double}
@@ -137,6 +138,8 @@ rotateExtrude    :: Node -> Node
 rotateExtrude n2  = RotateExtrude {node = n2, fn = 0, fa = defaultFa, fs = defaultFs}
 dxfRotate        :: String -> Node
 dxfRotate file    = DXFRotateExtrude {file = file, layer = "", fn = 0, fa = defaultFa, fs = defaultFs}
+stl              :: String -> Node
+stl file          = STLImport {file = file}
 
 project :: Bool -> Node -> Node
 project cut n = Projection cut n
@@ -203,6 +206,7 @@ instance Show Node where
   show (DXFRotateExtrude file layer fn fa fs) = "rotate_extrude (" 
                                    ++ (showFnFaFs fn fa fs) 
                                    ++ ", file=" ++ (show file) ++ (showLayer layer) ++");"
+  show (STLImport file) = "stl_import (file=" ++ (show file) ++ ");" 
   show (Circle r) = "circle(r=" ++ (show r) ++ ");"
   show (Square s c) = "square(" ++ (show s) ++ (showCenter c) ++ ");"
   show (Polygon p l) = "polygon(points = " ++ (showVector' p)  ++ ", paths = " ++ (show l) ++ ");"
