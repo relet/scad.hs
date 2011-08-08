@@ -54,17 +54,17 @@ cone r1 r2 h  = uCylinder {r = r1, r2 = r2, h = h}
 sphere       :: Double -> Node
 sphere r      = uSphere {r = r}
 
-enlist       :: (Num a) => a -> a -> [a]
-enlist a b    = [a,b]
+unit         :: Int -> [Double]
+unit dt       = [0.0,1.0/(fromIntegral (dt-1))..1.0]
 line         :: (Double -> [Double]) -> Int -> Node
-line fgen dt  = Polygon { points = map fgen t, paths = [[0..(dt-1)]++[0]] }
-                where t   = [0.0,1.0/(fromIntegral (dt-1))..1.0]
+line fgen dt  = Polygon { points = map fgen t, paths = [[0..(dt-1)]] }
+                where t   = unit dt 
 
 plane           :: (Double -> Double -> [Double]) -> Int -> Int -> Node
 plane fgen dt du = Polyhedron { points = foldl (++) [] $ map (\x-> map (fgen x) u) t,
                                 triangles = foldl (++) [] [[[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]] | i<-[0..length seq1 -1]] }
-                where t = [0.0,1.0/(fromIntegral (dt-1))..1.0]
-                      u = [0.0,1.0/(fromIntegral (du-1))..1.0]
+                where t = unit dt
+                      u = unit du 
                       seq1 = [u * dt + t | u<-[0..dt-1], t<-[0..du-1]]
                       seq2 = tail seq1 ++ [0]
                       seq3 = drop du seq1 ++ (take du seq1) 
@@ -80,10 +80,21 @@ bezierfn pts  = case compare (length pts) 2 of
                                 (map (*t)     (bezierfn (tail pts) t))
                   LT -> error "bezier function invoked with less than two points to interpolate between"
 bezierPlane          :: [[[Double]]] -> Int -> Int -> Node
-bezierPlane pts dt du = plane (bipatch pts) dt du
-bipatch              :: [[[Double]]] -> (Double -> Double -> [Double])
-bipatch pts           = \t -> (bezierfn (map (\row -> bezierfn row t) pts))
-                         
+bezierPlane pts dt du = plane (bezierPlaneFn pts) dt du
+bezierPlaneFn        :: [[[Double]]] -> (Double -> Double -> [Double])
+bezierPlaneFn pts     = \t -> (bezierfn (map (\row -> bezierfn row t) pts))
+bicubic        :: [[Double]] -> Int -> Node
+bicubic pts dt  = Polygon { points = foldl (++) [] (map (\g -> map (bezierfn g) t) groups), 
+                            paths  = [[0..dt*sets-1]] }
+                  where t = unit dt
+                        groups = map ((take 4).(\x->drop (x*3) pts)) [0..sets-1]
+                        sets = (length pts-1) `div` 3
+
+torus                :: Double -> Double -> Int -> Int -> Node
+torus orad irad dt du = plane (\u-> \v-> [orad * (sin (u*2*pi)) + irad * (sin (v*2*pi)) * (sin (u*2*pi)), 
+                                          orad * (cos (u*2*pi)) + irad * (sin (v*2*pi)) * (cos (u*2*pi)), 
+                                          irad * (cos (v*2*pi))]   ) dt du
+
 
        
 
