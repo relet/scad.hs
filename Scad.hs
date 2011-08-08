@@ -70,6 +70,23 @@ plane fgen dt du = Polyhedron { points = foldl (++) [] $ map (\x-> map (fgen x) 
                       seq3 = drop du seq1 ++ (take du seq1) 
                       seq4 = map ((`mod`(dt*du)).(+dt)) seq2
 
+bezier       :: [[Double]] -> Int -> Node
+bezier pts dt = line (bezierfn pts) dt 
+bezierfn     :: [[Double]] -> (Double -> [Double])
+bezierfn pts  = case compare (length pts) 2 of
+                  EQ -> \t -> map (\d -> pts!!0!!d * (1-t) + pts!!1!!d * t) [0..length (pts!!0)-1]
+                  GT -> \t -> zipWith (+) 
+                                (map (*(1-t)) (bezierfn (init pts) t)) 
+                                (map (*t)     (bezierfn (tail pts) t))
+                  LT -> error "bezier function invoked with less than two points to interpolate between"
+bezierPlane          :: [[[Double]]] -> Int -> Int -> Node
+bezierPlane pts dt du = plane (bipatch pts) dt du
+bipatch              :: [[[Double]]] -> (Double -> Double -> [Double])
+bipatch pts           = \t -> (bezierfn (map (\row -> bezierfn row t) pts))
+                         
+
+       
+
 uCircle  :: Node
 uCircle   = Circle {r = 1}
 polygon :: Node
