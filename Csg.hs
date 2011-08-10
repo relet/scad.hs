@@ -17,7 +17,7 @@ data Polyhedron = Polyhedron [Point] [Triangle] Extent -- vertices, polygons, ex
   deriving (Show, Eq, Ord)
 data Status = Inside | Outside | Boundary | Unknown -- vertex status, tbd 
   deriving (Show, Eq, Ord, Enum)
-data Intersection = Intersection Extent Line
+data Intersection = Intersection [(Double, Point)] Line
   deriving (Show, Eq, Ord)
 data Relation = Coplanar | DoNotIntersect | Intersect Intersection Intersection -- polygon relationship 
   deriving (Show, Eq, Ord)
@@ -67,14 +67,20 @@ overlaps a b  = foldl (&&) True $ zipWith (\x-> \y-> ((x!!0)<=(y!!1)&&(x!!1)>=(y
 splitBy      :: Polyhedron -> Polyhedron -> Polyhedron
 splitBy (Polyhedron pa ta ea) (Polyhedron pb tb eb) = 
                 if overlaps ea eb then
-                  Polyhedron pa ta ea -- replace with split P 
+{-
+a congruent list (clist) is a list of polygons who do not intersect themselves. pa and pb are congruent.
+for every pa
+  intersect with every pb creating two mutually congruent clists:
+  - clist pa' of polygons that are congruent with pa, pa' and pb' (but have to be split against all remaining pb)
+  (that is, merge pa'++pa after each split, if pa' has changed)
+  - clist pb' of polygons that are congruent with pa', pb' and pb (but have to be split against all remaining pa)
+(that is, merge pb++pb' at the end of each pa iteration if it has changed)
+-}
+                  Polyhedron pa ta ea  
                 else Polyhedron pa ta ea
                 where
-                  all_pb_x_pa = map (all_pb_x.extent) all_pa_in_b
-                  all_pb_x e  = filter (\p->overlaps (extent p) e) all_pb
-                  all_pa_in_b = filter (\p->overlaps (extent p) (extent pb)) all_pa
-                  all_pa      = byIndex pa ta 
-                  all_pb      = byIndex pb tb
+                  all_pa      = {- filter (\p->overlaps (extent p) eb) $ -} byIndex pa ta 
+                  all_pb      = {- filter (\p->overlaps (extent p) ea) $ -} byIndex pb tb
 
 vmul          :: Vector -> Double -> Vector
 vmul v d       = map (*d) v
@@ -85,7 +91,7 @@ vsub a b       = zipWith (-) a b
 vadd          :: Vector -> Vector -> Vector
 vadd a b       = zipWith (+) a b
 norm          :: Vector -> Vector
-norm a          = a `vdiv` (sqrt $ dot a a)
+norm a          = a `vdiv` (len a)
 dot           :: Vector -> Vector -> Double
 dot a b        = sum (zipWith (*) a b) 
 cross         :: Vector -> Vector -> Vector
@@ -93,7 +99,7 @@ cross u v      =[(u!!1) * (v!!2) - (u!!2) * (v!!1),
                  (u!!2) * (v!!0) - (u!!0) * (v!!2),
                  (u!!0) * (v!!1) - (u!!1) * (v!!0)] 
 len           :: Vector -> Double
-len v          = sqrt $ sum (map (^2) v)
+len v          = sqrt $ dot v v
 dnull         :: Polygon -> Vector -> Double
 dnull p n      = sum $ zipWith (*) n (p!!0)
 
@@ -106,7 +112,7 @@ intersect a b  = case cmp of
                   [LT, LT, LT] -> DoNotIntersect
                   [GT, GT, GT] -> DoNotIntersect
                   other        -> 
-                      if overlaps sega segb
+                      if overlaps [map fst sega] [map fst segb]
                       then Intersect (Intersection sega int) (Intersection segb int) else DoNotIntersect
                  where rela = map (dist pb) a
                        relb = map (dist pa) b
@@ -128,8 +134,8 @@ interLine (Plane np dp) (Plane nq dq) =
 dobq   :: (Ord a) => [a] -> [a]
 dobq v  = if length v == 1 then v++v else v
 
-interSeg          :: Polygon -> [Double] -> Line -> Extent --cleanup
-interSeg po da l   = [dobq $ map (fst) $ sort $ plist]
+interSeg          :: Polygon -> [Double] -> Line -> [(Double, Point)] 
+interSeg po da l   = dobq $ sort $ plist
                      where plist = foldl (++) [] ((interSegV po da l) ++ (interSegE po da l))
 interSegV         :: Polygon -> [Double] -> Line -> [[(Double, Vector)]]
 interSegV po da (Line p v) = [if da!!i === 0 
@@ -153,8 +159,8 @@ interSegE po da (Line p v) = [if (di>0) && (dj<0)
 collinear    :: Polygon -> Bool
 collinear po  = len (cross (vsub (po!!1) (po!!0)) (vsub (po!!2) (po!!0))) === 0
 
-inPoly      :: Polygon -> Point -> Bool
-inPoly po pt = (u > 0) && (v > 0) && (u+v<1) -- ouch. 
+inPoly      :: Polygon -> Point -> Bool          -- including boundaries
+inPoly po pt = (u >= 0) && (v >= 0) && (u+v<=1)  -- obviously cloned from a non-functional source 
                where u = (d11 * d02 - d01 * d12) * inv
                      v = (d00 * d12 - d01 * d02) * inv
                      inv = 1 / (d00 * d11 - d01 * d01)
@@ -171,12 +177,19 @@ inPoly po pt = (u > 0) && (v > 0) && (u+v<1) -- ouch.
 trisect      :: Polygon -> Point -> [Polygon]
 trisect po pt = filter (not.collinear) $ map (++[pt]) pairs 
                 where pairs = zipWith (\x-> \y-> [x,y]) po (tail po ++ [head po])
+subsect      :: [Polygon] -> Point -> [Polygon]
+subsect ps pt = if length ps == 1 then
+                  trisect (ps!!0) pt
+                else
+                  foldl (++) [] subs
+                where subs = map (\po-> if inPoly po pt then trisect po pt else [po]) ps 
 
-split        :: Polygon -> Polygon -> [Polygon]
+split        :: Polygon -> Polygon -> [[Polygon]]
 split a b     = case intersect a b of 
-                  Intersect (Intersection e1 l1) (Intersection e2 l2) -> 
-                    [a] -- trisect a by all p1, b by all p2, return
-                  _ -> [a]
+                  Intersect (Intersection p1 l1) (Intersection p2 l2) -> 
+                    [subsect (trisect a (snd$p1!!0)) (snd$p1!!1),
+                     subsect (trisect b (snd$p2!!0)) (snd$p2!!1)] 
+                  _ -> [[a],[b]]
 
 solve            :: Double -> Double -> Double -> Double -> Double -> Double -> [Double]
 solve a b c d e f = [(b*f - c*e) / (-den),
