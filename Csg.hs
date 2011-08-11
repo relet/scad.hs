@@ -25,7 +25,7 @@ data Plane = Plane Vector Double -- unit normal, distance
   deriving (Show, Eq, Ord)
 
 cube_pts  = [[0::Double,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
-cube_tris = [[0::Int,1,2],[1,4,2],[0,3,1],[3,5,1],[0,3,2],[3,6,2],[3,5,6],[5,7,6],[5,7,4],[4,1,5],[2,6,7],[7,4,2]]
+cube_tris = [[0::Int,1,2],[1,4,2],[0,3,1],[3,5,1],[0,2,3],[3,2,6],[3,6,5],[5,6,7],[5,7,4],[4,1,5],[2,7,6],[7,2,4]]
 cube      = poly cube_pts cube_tris
 cube2     = poly (map (vadd [0.5,0.5,0.5]) cube_pts) cube_tris
 other_po  = [[0::Double,0,1],[0,1,0],[1,0,0]]
