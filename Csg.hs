@@ -106,6 +106,8 @@ cross u v      =[(u!!1) * (v!!2) - (u!!2) * (v!!1),
                  (u!!0) * (v!!1) - (u!!1) * (v!!0)] 
 len           :: Vector -> Double
 len v          = sqrt $ dot v v
+avg           :: Polygon -> Point
+avg po         = vdiv (foldl1 vadd po) 3
 dnull         :: Polygon -> Vector -> Double
 dnull p n      = sum $ zipWith (*) n (p!!0)
 
@@ -204,3 +206,17 @@ solve            :: Double -> Double -> Double -> Double -> Double -> Double -> 
 solve a b c d e f = [(b*f - c*e) / (-den),
                      (a*f - c*d) / (den)]
                     where den = (a*e - b*d)
+
+ray          :: Polygon -> Line
+ray po        = Line (avg po) (nnormal po)
+intPt        :: Line -> Double -> Point
+intPt (Line p0 n) dist  = vadd p0 (vmul n dist)
+inOrOut      :: Polygon -> [Polygon] -> [(Double, Double, Polygon)]
+inOrOut po pp = filter (analyze) $ map (\p-> (rn `dot` (normal p), dist (plane p) bary, p)) pp 
+                where 
+                  (Line bary rn) = ray po
+                  analyze (pro, dis, p) | dis < 0                = False
+                                        | dis > 0   && pro === 0 = False
+                                        | dis === 0 && pro > 0   = inPoly p bary
+                                        | dis > 0   && pro > 0   = inPoly p (intPt (Line bary rn) dis)
+--                                        | dis === 0 && pro === 0 = ... TODO: perturb ray, try again
