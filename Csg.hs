@@ -13,12 +13,14 @@ type Extent   = [[Double]]
 
 data Polyhedron = Polyhedron [Point] [Triangle] Extent -- vertices, polygons, extent
   deriving (Show, Eq, Ord)
-data Status = Inside | Outside | Boundary | Unknown -- vertex status, tbd 
-  deriving (Show, Eq, Ord, Enum)
+--data Status = Inside | Outside | Boundary | Unknown -- vertex status, tbd 
+--  deriving (Show, Eq, Ord, Enum)
 data Intersection = Intersection [(Double, Point)] Line
   deriving (Show, Eq, Ord)
 data Relation = Coplanar | DoNotIntersect | Intersect Intersection Intersection -- polygon relationship 
   deriving (Show, Eq, Ord)
+data Status = Inside | Outside | BoundarySame | BoundaryOpposite
+  deriving (Show, Eq, Ord, Enum)
 data Line = Line Point Vector -- arbitrary point and unit direction vector 
   deriving (Show, Eq, Ord)
 data Plane = Plane Vector Double -- unit normal, distance
@@ -33,6 +35,8 @@ other_po  = [[0::Double,0,1],[0,1,0],[1,0,0]]
 -- to compensate for floating point errors we compare but roughly
 (===)    :: Double -> Double -> Bool
 a === b   = abs(a-b) < 0.00001 
+(=/=)    :: Double -> Double -> Bool
+a =/= b   = not $ a === b 
 
 -- construct memoizing structures from basic data
 plane   :: Polygon -> Plane
@@ -211,12 +215,24 @@ ray          :: Polygon -> Line
 ray po        = Line (avg po) (nnormal po)
 intPt        :: Line -> Double -> Point
 intPt (Line p0 n) dist  = vadd p0 (vmul n dist)
-inOrOut      :: Polygon -> [Polygon] -> [(Double, Double, Polygon)]
-inOrOut po pp = filter (analyze) $ map (\p-> (rn `dot` (normal p), dist (plane p) bary, p)) pp 
+perturb      :: Line -> Line
+perturb (Line p n) = Line p (vadd n [pi/97, -pi/101, pi/103]) -- random would be better
+
+inOrOut      :: Polygon -> [Polygon] -> Status 
+inOrOut po pp = classify $ take 1 $ L.sort $ filter (analyze) $ map dispro pp 
                 where 
                   (Line bary rn) = ray po
-                  analyze (pro, dis, p) | dis < 0                = False
+                  dispro p       = (dist (plane p) bary, rn `dot` (normal p), p) -- todo: memoize plane p / extract normal p 
+                  analyze (dis, pro, p) | dis < 0                = False
                                         | dis > 0   && pro === 0 = False
-                                        | dis === 0 && pro > 0   = inPoly p bary
-                                        | dis > 0   && pro > 0   = inPoly p (intPt (Line bary rn) dis)
---                                        | dis === 0 && pro === 0 = ... TODO: perturb ray, try again
+                                        | dis === 0 && pro =/= 0 = inPoly p bary
+                                        | dis > 0   && pro =/= 0 = inPoly p (intPt (Line bary rn) dis)
+                                        | dis === 0 && pro === 0 = let (Line bary' rn') = perturb (Line bary rn)
+                                                                       dis' = dist (plane p) bary'
+                                                                       pro' = rn' `dot` (normal p)
+                                                                   in  analyze (dis', pro', p)
+                  classify []             = Outside
+                  classify ((dxp, pxp, p):_) | dxp > 0 = Outside
+                                             | dxp < 0 = Inside
+                                             | pxp > 0 = BoundarySame
+                                             | pxp < 0 = BoundaryOpposite
