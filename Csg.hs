@@ -8,6 +8,7 @@ import Debug.Trace (trace)
 type Vector   = [Double]
 type Point    = [Double]
 type Polygon  = [Point]
+type Polyset  = [Polygon]
 type Triangle = [Int]
 type Extent   = [[Double]]
 
@@ -17,7 +18,7 @@ data Polyhedron = Polyhedron [Point] [Triangle] Extent -- vertices, polygons, ex
 --  deriving (Show, Eq, Ord, Enum)
 data Intersection = Intersection [(Double, Point)] Line
   deriving (Show, Eq, Ord)
-data Relation = Coplanar | DoNotIntersect | Intersect Intersection Intersection -- polygon relationship 
+data Relation = Coplanar | DoNotIntersect | Intersect Intersection -- polygon relationship 
   deriving (Show, Eq, Ord)
 data Status = Inside | Outside | BoundarySame | BoundaryOpposite
   deriving (Show, Eq, Ord, Enum)
@@ -32,11 +33,21 @@ cube      = poly cube_pts cube_tris
 cube2     = poly (map (vadd [0.5,0.5,0.5]) cube_pts) cube_tris
 other_po  = [[0::Double,0,1],[0,1,0],[1,0,0]]
 
--- to compensate for floating point errors we compare but roughly
+-- to compensate for floating point errors we compare but roughly, in dubio pro equality
+precision :: Double
+precision  = 0.00001
 (===)    :: Double -> Double -> Bool
-a === b   = abs(a-b) < 0.00001 
+a === b   = abs(a-b) < precision 
 (=/=)    :: Double -> Double -> Bool
 a =/= b   = not $ a === b 
+(<<<)     :: Double -> Double -> Bool
+a <<< b   = b-a > precision
+(>>>)     :: Double -> Double -> Bool
+a >>> b   = a-b > precision
+(<=<)     :: Double -> Double -> Bool
+a <=< b   = b-a >= -precision
+(>=>)     :: Double -> Double -> Bool
+a >=> b   = a-b >= -precision
 
 -- construct memoizing structures from basic data
 plane   :: Polygon -> Plane
@@ -45,12 +56,12 @@ plane p  = Plane n (dnull p n)
 poly    :: [Point] -> [Triangle] -> Polyhedron
 poly p t = Polyhedron p t (extent p)
 
-polyFromList   :: [Polygon] -> Polyhedron
+polyFromList   :: Polyset -> Polyhedron
 polyFromList pp = poly pts tris
                  where pts  = S.toList $ S.fromList (foldl (++) [] pp) 
                        tris = map (map (\pt-> fromJust (L.elemIndex pt pts))) pp
 
-byIndex  :: [Point] -> [Triangle] -> [Polygon]
+byIndex  :: [Point] -> [Triangle] -> Polyset 
 byIndex pts tris = map (map (pts!!)) tris
 
 nnormal :: Polygon -> Vector
@@ -69,27 +80,47 @@ pairs        :: [Int] -> [(Int,Int)]
 pairs l       = [(x,y) | x<-l, y<-l, x/=y]
 adjacent     :: [[Int]] -> (Map Int (Set Int))
 adjacent tris = foldl (\m-> \p->insertWith (S.union) (fst p) (S.singleton (snd p)) m) M.empty $ foldl (++) [] $ map pairs tris
-overlaps     :: Extent -> Extent -> Bool
-overlaps a b  = foldl (&&) True $ (zipWith (<=) (a!!0) (b!!1)) ++ (zipWith (>=) (a!!1) (b!!0))
 
-splitBy      :: Polyhedron -> Polyhedron -> (Polyhedron, Polyhedron)
-splitBy (Polyhedron pa ta ea) (Polyhedron pb tb eb) = 
+-- todo: merge these two
+overlaps     :: Extent -> Extent -> Bool
+overlaps a b  = foldl (&&) True $ (zipWith (<=<) (a!!0) (b!!1)) ++ (zipWith (>=>) (a!!1) (b!!0))
+--overlap      :: Extent -> Extent -> Extent
+--overlap a b   = [zipWith (max) (a!!0) (b!!0), zipWith (min) (a!!1) (b!!1)]
+overlap        :: [(Double, Point)] -> [(Double, Point)] -> [(Double, Point)]
+overlap a b     = [max (a!!0) (b!!0), min (a!!1) (b!!1)]
+
+scad :: Polyhedron -> String
+scad (Polyhedron pa ta ea) = "polyhedron (points="++(show pa)++", triangles="++(show ta)++");"
+
+reverse  :: Polyset -> Polyset
+reverse p = map (L.reverse) p
+
+csgUnion       :: Polyhedron -> Polyhedron -> Polyhedron
+csgUnion (Polyhedron pa ta ea) (Polyhedron pb tb eb)
+                = polyFromList $ nub ( a ++ b
+                               ++ (filter ((/=Inside).(inOrOut ppb)) a')
+                               ++ (filter ((/=Inside).(inOrOut ppa)) b'))
+                  where (a, a', b', b) = splitBy ppa ea ppb eb 
+                        ppa         = byIndex pa ta
+                        ppb         = byIndex pb tb
+
+splitBy      :: Polyset -> Extent -> Polyset -> Extent -> (Polyset, Polyset, Polyset, Polyset) 
+-- returns all A outside B, all A inside B (subsected), all B inside A (subsected), all B outside A
+splitBy ppa ea ppb eb = 
                 if overlaps ea eb then
-                  (polyFromList resulta, polyFromList resultb)
-                else (Polyhedron pa ta ea, Polyhedron pb tb eb)
+                  (snd all_pa, iter3, iter4, snd all_pb)
+                else (ppa, [], [], ppb)
                 where
-                  resulta     = (snd all_pa) ++ iter3
-                  resultb     = (snd all_pb) ++ iter4
                   iter4       = splitHbyH iter2 iter1
                   iter3       = splitHbyH iter1 iter2
-                  iter2       = splitHbyH (fst all_pb) (fst all_pb)
+                  iter2       = splitHbyH (fst all_pb) (fst all_pa)
                   iter1       = splitHbyH (fst all_pa) (fst all_pb)
-                  all_pa      = L.partition (\p->overlaps (extent p) eb) $ byIndex pa ta -- in/out of algo range 
-                  all_pb      = L.partition (\p->overlaps (extent p) ea) $ byIndex pb tb
+                  all_pa      = L.partition (\p->overlaps (extent p) eb) ppa 
+                  all_pb      = L.partition (\p->overlaps (extent p) ea) ppb
 
-splitHbyP      :: [Polygon] -> Polygon -> [Polygon] -- split all polys in a hedron by a single poly
+splitHbyP      :: Polyset -> Polygon -> Polyset -- split all polys in a hedron by a single poly
 splitHbyP as b  = foldl (++) [] (map (snd.(split b)) as) 
-splitHbyH      :: [Polygon] -> [Polygon] -> [Polygon] 
+splitHbyH      :: Polyset -> Polyset -> Polyset 
 splitHbyH as bs = foldl splitHbyP as bs
 
 vmul          :: Vector -> Double -> Vector
@@ -125,11 +156,12 @@ intersect a b  = case cmp of
                   [GT, GT, GT] -> DoNotIntersect
                   other        -> 
                       if (length sega > 0) && (length segb > 0) && (overlaps (ext sega) (ext segb))
-                      then Intersect (Intersection sega int) (Intersection segb int) else DoNotIntersect
+                      then Intersect (Intersection over int) else DoNotIntersect
                  where rela = map (dist pb) a
                        relb = map (dist pa) b
                        cmp = map (compare 0) rela 
                        int = interLine pa pb
+                       over = overlap sega segb
                        pa  = plane a
                        pb  = plane b
                        sega = interSeg a rela int
@@ -138,8 +170,8 @@ intersect a b  = case cmp of
 
 interLine    :: Plane -> Plane -> Line
 interLine (Plane np dp) (Plane nq dq) = 
-                Line (if   n!!0 > 0    then [0] ++ (solve (np!!1) (np!!2) dp (nq!!1) (nq!!2) dq)
-                      else if n!!2 > 0 then (solve (np!!0) (np!!1) dp (nq!!0) (nq!!1) dq) ++ [0]
+                Line (if   n!!0 =/= 0    then [0] ++ (solve (np!!1) (np!!2) dp (nq!!1) (nq!!2) dq)
+                      else if n!!2 =/= 0 then (solve (np!!0) (np!!1) dp (nq!!0) (nq!!1) dq) ++ [0]
                       else                  [s3!!0, 0, s3!!1]) n
                 where n  = cross np nq
                       s3 = solve (np!!0) (np!!2) dp (nq!!0) (nq!!2) dq
@@ -158,7 +190,7 @@ interSegV po da (Line p v) = [if da!!i === 0
                                let pi = po!!i
                              ] 
 interSegE         :: Polygon -> [Double] -> Line -> [[(Double, Vector)]]
-interSegE po da (Line p v) = [if (di>0) && (dj<0) 
+interSegE po da (Line p v) = [if (di>>>0) && (dj<<<0) 
                               then [(len $ vsub ip p, ip)]
                               else []
                              | i<-[0..length po-1], j<-[0..length po-1],
@@ -173,7 +205,7 @@ collinear    :: Polygon -> Bool
 collinear po  = len (cross (vsub (po!!1) (po!!0)) (vsub (po!!2) (po!!0))) === 0
 
 inPoly      :: Polygon -> Point -> Bool          -- including boundaries
-inPoly po pt = (u >= 0) && (v >= 0) && (u+v<=1)  -- obviously cloned from a non-functional source 
+inPoly po pt = (u >=> 0) && (v >=> 0) && ((u+v) <=< 1)  -- obviously cloned from a non-functional source 
                where u = (d11 * d02 - d01 * d12) * inv
                      v = (d00 * d12 - d01 * d02) * inv
                      inv = 1 / (d00 * d11 - d01 * d01)
@@ -187,10 +219,10 @@ inPoly po pt = (u >= 0) && (v >= 0) && (u+v<=1)  -- obviously cloned from a non-
                      v2 = pt `vsub` p0
                      p0 = po!!0
 
-trisect      :: Polygon -> Point -> [Polygon]
+trisect      :: Polygon -> Point -> Polyset 
 trisect po pt = filter (not.collinear) $ map (++[pt]) pairs 
                 where pairs = zipWith (\x-> \y-> [x,y]) po (tail po ++ [head po])
-subsect      :: [Polygon] -> Point -> [Polygon]
+subsect      :: Polyset -> Point -> Polyset
 subsect ps pt = if length ps == 1 then
                   trisect (ps!!0) pt
                 else
@@ -199,11 +231,11 @@ subsect ps pt = if length ps == 1 then
 
 -- Note to self: Why lazy evaluation is awesome: 
 -- this method can subsect both polygons, but will do so only if you actually evaluate the results 
-split        :: Polygon -> Polygon -> ([Polygon], [Polygon])
+split        :: Polygon -> Polygon -> (Polyset, Polyset)
 split a b     = case intersect a b of 
-                  Intersect (Intersection p1 l1) (Intersection p2 l2) -> 
-                    (subsect (trisect a (snd$p1!!0)) (snd$p1!!1),
-                     subsect (trisect b (snd$p2!!0)) (snd$p2!!1))
+                  Intersect (Intersection p l) -> 
+                    (subsect (trisect a (snd$p!!0)) (snd$p!!1),
+                     subsect (trisect b (snd$p!!0)) (snd$p!!1))
                   _ -> ([a],[b])
 
 solve            :: Double -> Double -> Double -> Double -> Double -> Double -> [Double]
@@ -217,22 +249,28 @@ intPt        :: Line -> Double -> Point
 intPt (Line p0 n) dist  = vadd p0 (vmul n dist)
 perturb      :: Line -> Line
 perturb (Line p n) = Line p (vadd n [pi/97, -pi/101, pi/103]) -- random would be better
+distPL       :: Plane -> Point -> Line -> Double
+distPL (Plane pn d) p0 (Line r rn) = (vsub p0 r) `dot` pn / (rn `dot` pn)
 
-inOrOut      :: Polygon -> [Polygon] -> Status 
-inOrOut po pp = classify $ take 1 $ L.sort $ filter (analyze) $ map dispro pp 
+inOrOut      :: Polyset -> Polygon -> Status 
+inOrOut pp po = classify $ take 1 $ L.sortBy dabs $ filter (analyze) $ map dispro pp 
                 where 
-                  (Line bary rn) = ray po
-                  dispro p       = (dist (plane p) bary, rn `dot` (normal p), p) -- todo: memoize plane p / extract normal p 
-                  analyze (dis, pro, p) | dis < 0                = False
-                                        | dis > 0   && pro === 0 = False
-                                        | dis === 0 && pro =/= 0 = inPoly p bary
-                                        | dis > 0   && pro =/= 0 = inPoly p (intPt (Line bary rn) dis)
-                                        | dis === 0 && pro === 0 = let (Line bary' rn') = perturb (Line bary rn)
-                                                                       dis' = dist (plane p) bary'
-                                                                       pro' = rn' `dot` (normal p)
-                                                                   in  analyze (dis', pro', p)
+                  r              = ray po
+                  (Line bary rn) = r
+                  dabs (a,b,c,d) (e,f,g,h) = compare (abs a) (abs e)
+                  dispro p       = (distPL (plane p) (p!!0) r, dist (plane p) bary, rn `dot` (normal p), p) -- todo: memoize plane p / extract normal p 
+                  analyze (dis, _, pro, p) | dis <<< 0              = False
+                                           | isNaN dis              = False
+                                           | dis >>> 0 && pro === 0 = False
+                                           | dis === 0 && pro =/= 0 = inPoly p bary
+                                           | dis >>> 0 && pro =/= 0 = inPoly p (intPt (Line bary rn) dis)
+                                           | dis === 0 && pro === 0 = let (Line bary' rn') = perturb (Line bary rn)
+                                                                          dis' = dist (plane p) bary'
+                                                                          pro' = rn' `dot` (normal p)
+                                                                      in  analyze (dis', 0, pro', p)
+                                           | otherwise = trace ("DEBUG " ++ (show dis) ++ " - " ++ (show pro) ++ "\n" ++ (show pp) ++ "\n" ++ (show po)) False
                   classify []             = Outside
-                  classify ((dxp, pxp, p):_) | dxp > 0 = Outside
-                                             | dxp < 0 = Inside
-                                             | pxp > 0 = BoundarySame
-                                             | pxp < 0 = BoundaryOpposite
+                  classify ((_, dxp, pxp, p):_) | dxp >>> 0 = Outside
+                                                | dxp <<< 0 = Inside
+                                                | pxp >>> 0 = BoundarySame
+                                                | pxp <<< 0 = BoundaryOpposite
