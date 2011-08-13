@@ -280,7 +280,6 @@ inOrOut pp po = classify $ take 1 $ L.sortBy dabs $ filter (analyze) $ map dispr
                                                                           dis' = dist (plane p) bary'
                                                                           pro' = rn' `dot` (normal p)
                                                                       in  analyze (dis', 0, pro', p)
-                                           | otherwise = trace ("DEBUG " ++ (show dis) ++ " - " ++ (show pro) ++ "\n" ++ (show pp) ++ "\n" ++ (show po)) False
                   classify []             = Outside
                   classify ((_, dxp, pxp, p):_) | dxp >>> 0 = Outside
                                                 | dxp <<< 0 = Inside

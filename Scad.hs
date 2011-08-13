@@ -1,4 +1,5 @@
 module Scad where
+import qualified Csg
 import Text.Printf (printf, PrintfType, PrintfArg)
 
 data Node =  
@@ -23,7 +24,7 @@ data Node =
   | Sphere {r :: Double, fn :: Int, fa :: Double, fs :: Double}
   | Cylinder {r :: Double, r2 :: Double, h :: Double, center :: Bool, fn :: Int, fa :: Double, fs :: Double} 
   | Cube {size :: [Double], center :: Bool}
-  | Polyhedron {points :: [[Double]], triangles :: [[Int]]}
+  | Polyhedron Csg.Polyhedron
 -- 2D
   | Circle {r :: Double}
   | Polygon {points :: [[Double]], paths :: [[Int]]}
@@ -45,10 +46,6 @@ uCylinder  = Cylinder { r = 1, r2 = 1, h = 1, center=False, fn = 0, fa = default
 -- unit sphere of radius 1
 uSphere   :: Node
 uSphere    = Sphere { r = 1, fn = 0, fa = defaultFa, fs = defaultFs }
--- a basic polyhedron template, usually to be overridden completely
-poly      :: Node
-poly       = Polyhedron { points    = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]], 
-                          triangles = [[0,1,2],[1,0,3],[0,2,3],[2,1,3]] }
 -- a cube generator: cube [w,h,d]
 cube         :: [Double] -> Node
 cube s        = uCube {size = s}
@@ -71,8 +68,9 @@ line fgen dt  = Polygon { points = map fgen t, paths = [[0..(dt-1)]] }
                 where t   = unit dt 
 -- a parametric polyhedron defined by its outline generator function over [0..1.0]^2 in dt,du steps
 plane           :: (Double -> Double -> [Double]) -> Int -> Int -> Node
-plane fgen dt du = Polyhedron { points = foldl (++) [] $ map (\x-> map (fgen x) u) t,
-                                triangles = foldl (++) [] [[[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]] | i<-[0..length seq1 -1]] }
+plane fgen dt du = Polyhedron (Csg.poly 
+                     (foldl (++) [] $ map (\x-> map (fgen x) u) t)
+                     (foldl (++) [] [[[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]] | i<-[0..length seq1 -1]]))
                 where t = unit dt
                       u = unit du 
                       seq1 = [u * dt + t | u<-[0..dt-1], t<-[0..du-1]]
@@ -223,7 +221,24 @@ showLayer  l        = if l /= "" then ", layer=" ++ (show l) else ""
 showTwist  t        = if t /= 0  then ", twist=" ++ (show t) else ""
 showBool b          = if b then "true" else "false"
 
+csgUnion :: Node -> Node -> Node
+csgUnion (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgUnion a b)
+csgInter :: Node -> Node -> Node
+csgInter (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgInter a b)
+csgDiff  :: Node -> Node -> Node
+csgDiff  (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgDiff a b)
+-- simplify any given node hierarchy to a single polyhedron
+render  :: Node -> Node 
+render (Polyhedron p) = Polyhedron p
+render (Union kids) | length kids == 1 = render $ kids!!0
+                    | otherwise        = foldl1 csgUnion $ map render kids
+render (Intersection kids) | length kids == 1 = render $ kids!!0
+                           | otherwise        = foldl1 csgInter $ map render kids
+render (Difference kids) | length kids == 1 = render $ kids!!0
+                         | otherwise        = foldl1 csgDiff $ map render kids
+render n = error ("render is not implemented for all nodes. " ++ (show n))
 
+-- display any given node as scad command hierarchy
 instance Show Node where
   show (Sphere r fn fa fs) = "sphere(r=" ++ (show r) 
                           ++ (showFnFaFs fn fa fs)
@@ -241,7 +256,7 @@ instance Show Node where
                           ++ (showCenter c)
                           ++ ");"
 
-  show (Polyhedron p t)    = "polyhedron(points = " ++ (showVector' p) ++ ", triangles = " ++ (show t) ++ ");"
+  show (Polyhedron (Csg.Polyhedron p t e))    = "polyhedron(points = " ++ (showVector' p) ++ ", triangles = " ++ (show t) ++ ");"
 
   show (Union kids)        = "union () {\n" ++ (showKids kids) ++"}"
   show (Difference kids)   = "difference () {\n" ++ (showKids kids) ++"}"
