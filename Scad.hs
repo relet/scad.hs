@@ -61,7 +61,7 @@ sphere r      = uSphere {r = r}
 
 -- internal: linear interpolation from 0.0 to 1.1 in dt steps
 unit         :: Int -> [Double]
-unit dt       = [0.0,1.0/(fromIntegral (dt-1))..1.0]
+unit dt       = [0.0,1.0/(fromIntegral dt-1)..1.0]
 -- a parametric polygon defined by its outline generator function over [0..1.0] in dt steps
 line         :: (Double -> [Double]) -> Int -> Node
 line fgen dt  = Polygon { points = map fgen t, paths = [[0..(dt-1)]] }
@@ -103,7 +103,7 @@ bicubic pts dt  = Polygon { points = foldl (++) [] (map (\g -> map (bezierfn g) 
 torus                :: Double -> Double -> Int -> Int -> Node
 torus orad irad dt du = plane (\u-> \v-> [orad * (sin (u*2*pi)) + irad * (sin (v*2*pi)) * (sin (u*2*pi)), 
                                           orad * (cos (u*2*pi)) + irad * (sin (v*2*pi)) * (cos (u*2*pi)), 
-                                          irad * (cos (v*2*pi))]   ) dt du
+                                          irad * (cos (v*2*pi))]   ) (dt+1) (du+1)
 
 
 -- 2D       
@@ -177,6 +177,8 @@ rot (x,y,z) n     = Rotate (x,y,z) n
 -- translate child nodes by normal
 trans            :: (Double, Double, Double) -> Node -> Node
 trans (x,y,z) n   = Translate (x,y,z) n
+(/>)             :: Node -> (Double, Double, Double) -> Node
+n /> (x,y,z)      = Translate (x,y,z) n
 -- mirror child nodes around normal
 mirror           :: (Double, Double, Double) -> Node -> Node
 mirror (x,y,z)  n = Mirror (x,y,z) n
@@ -242,15 +244,21 @@ csgInter :: Node -> Node -> Node
 csgInter (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgInter a b)
 csgDiff  :: Node -> Node -> Node
 csgDiff  (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgDiff a b)
+csgScale :: (Double, Double, Double) -> Node -> Node
+csgScale (x,y,z) (Polyhedron (Csg.Polyhedron p t e)) = Polyhedron (Csg.Polyhedron (map (Csg.vmulv [x,y,z]) p) t e)
+csgTrans :: (Double, Double, Double) -> Node -> Node
+csgTrans (x,y,z) (Polyhedron (Csg.Polyhedron p t e)) = Polyhedron (Csg.Polyhedron (map (Csg.vadd [x,y,z]) p) t e)
 -- simplify any given node hierarchy to a single polyhedron
 render  :: Node -> Node 
 render (Polyhedron p) = Polyhedron p
-render (Union kids) | length kids == 1 = render $ kids!!0
-                    | otherwise        = foldl1 csgUnion $ map render kids
+render (Union kids)        | length kids == 1 = render $ kids!!0
+                           | otherwise        = foldl1 csgUnion $ map render kids
 render (Intersection kids) | length kids == 1 = render $ kids!!0
                            | otherwise        = foldl1 csgInter $ map render kids
-render (Difference kids) | length kids == 1 = render $ kids!!0
-                         | otherwise        = foldl1 csgDiff $ map render kids
+render (Difference kids)   | length kids == 1 = render $ kids!!0
+                           | otherwise        = foldl1 csgDiff $ map render kids
+render (Scale v kid)     = csgScale v $ render kid
+render (Translate v kid) = csgTrans v $ render kid
 render n = error ("render is not implemented for all nodes. " ++ (show n))
 
 -- display any given node as scad command hierarchy

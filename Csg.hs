@@ -4,6 +4,7 @@ import Data.Set as S hiding (map, filter, split)
 import Data.List as L hiding (map, filter, intersect)
 import Data.Maybe as Q
 import Debug.Trace (trace)
+-- TODO: actually use a matrix library for matrix stuff, tyvm
 
 type Vector   = [Double]
 type Point    = [Double]
@@ -137,6 +138,8 @@ splitHbyH as bs = foldl splitHbyP as bs
 
 vmul          :: Vector -> Double -> Vector
 vmul v d       = map (*d) v
+vmulv         :: Vector -> Vector -> Vector
+vmulv v v'     = zipWith (*) v v'
 vdiv          :: Vector -> Double -> Vector
 vdiv v d       = map (/d) v
 vsub          :: Vector -> Vector -> Vector
@@ -147,6 +150,8 @@ norm          :: Vector -> Vector
 norm a          = a `vdiv` (len a)
 dot           :: Vector -> Vector -> Double
 dot a b        = sum (zipWith (*) a b) 
+--mmult         :: Num a => [[a]] -> [[a]] -> [[a]] 
+--mmult a b      = [[ sum $ zipWith (*) ar bc | bc <- (transpose b) ] | ar <- a ]
 cross         :: Vector -> Vector -> Vector
 cross u v      =[(u!!1) * (v!!2) - (u!!2) * (v!!1),
                  (u!!2) * (v!!0) - (u!!0) * (v!!2),
