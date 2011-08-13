@@ -14,8 +14,6 @@ type Extent   = [[Double]]
 
 data Polyhedron = Polyhedron [Point] [Triangle] Extent -- vertices, polygons, extent
   deriving (Show, Eq, Ord)
---data Status = Inside | Outside | Boundary | Unknown -- vertex status, tbd 
---  deriving (Show, Eq, Ord, Enum)
 data Intersection = Intersection [(Double, Point)] Line
   deriving (Show, Eq, Ord)
 data Relation = Coplanar | DoNotIntersect | Intersect Intersection -- polygon relationship 
@@ -89,9 +87,6 @@ overlaps a b  = foldl (&&) True $ (zipWith (<=<) (a!!0) (b!!1)) ++ (zipWith (>=>
 --overlap a b   = [zipWith (max) (a!!0) (b!!0), zipWith (min) (a!!1) (b!!1)]
 overlap        :: [(Double, Point)] -> [(Double, Point)] -> [(Double, Point)]
 overlap a b     = [max (a!!0) (b!!0), min (a!!1) (b!!1)]
-
-scad :: Polyhedron -> String
-scad (Polyhedron pa ta ea) = "polyhedron (points="++(show pa)++", triangles="++(show ta)++");"
 
 reverse  :: Polyset -> Polyset
 reverse p = map (L.reverse) p
