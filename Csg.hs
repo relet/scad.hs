@@ -100,7 +100,7 @@ csgUnion       :: Polyhedron -> Polyhedron -> Polyhedron
 csgUnion (Polyhedron pa ta ea) (Polyhedron pb tb eb)
                 = polyFromList $ nub ( a ++ b ++ c ++ d) 
                   where (a, a', b', b) = splitBy ppa ea ppb eb 
-                        c           = filter ((==Outside).(inOrOut ppb)) a'
+                        c           = filter ((\x->(x == Outside) || (x == BoundarySame)).(inOrOut ppb)) a'
                         d           = filter ((==Outside).(inOrOut ppa)) b'
                         ppa         = byIndex pa ta
                         ppb         = byIndex pb tb
@@ -108,7 +108,7 @@ csgInter       :: Polyhedron -> Polyhedron -> Polyhedron
 csgInter (Polyhedron pa ta ea) (Polyhedron pb tb eb)
                 = polyFromList $ nub (c ++ d) 
                   where (a, a', b', b) = splitBy ppa ea ppb eb 
-                        c           = filter ((==Inside).(inOrOut ppb)) a'
+                        c           = filter ((\x->(x == Inside) || (x == BoundarySame)).(inOrOut ppb)) a'
                         d           = filter ((==Inside).(inOrOut ppa)) b'
                         ppa         = byIndex pa ta
                         ppb         = byIndex pb tb
@@ -116,7 +116,7 @@ csgDiff       :: Polyhedron -> Polyhedron -> Polyhedron
 csgDiff (Polyhedron pa ta ea) (Polyhedron pb tb eb)
                 = polyFromList $ nub (a ++ c ++ d) 
                   where (a, a', b', b) = splitBy ppa ea ppb eb 
-                        c           = filter ((==Outside).(inOrOut ppb)) a'
+                        c           = filter ((\x->(x == Outside) || (x == BoundaryOpposite)).(inOrOut ppb)) a'
                         d           = Csg.reverse $ filter ((==Inside).(inOrOut ppa)) b'
                         ppa         = byIndex pa ta
                         ppb         = byIndex pb tb
