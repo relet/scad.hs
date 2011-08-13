@@ -5,6 +5,7 @@ scad.hs provides a node hierarchy for constructive solid geometry. The main data
 Currently, any node hierarchy can be rendered into OpenScad code using the "show" function. 
 Hierarchies consisting solely of Polyhedra can also be rendered directly to STL using 
 > writeFile filename $ toStl node
+(Support for most primitives and operations is in progress)
 
 (C) 2011 Thomas Hirsch - Public domain
 
