@@ -221,6 +221,21 @@ showLayer  l        = if l /= "" then ", layer=" ++ (show l) else ""
 showTwist  t        = if t /= 0  then ", twist=" ++ (show t) else ""
 showBool b          = if b then "true" else "false"
 
+toStl  :: Node -> String 
+toStl (Polyhedron (Csg.Polyhedron pa ta ea)) = 
+                   "solid default\n" 
+                   ++ foldl (++) "" (map ffacet facets)
+                   ++ "endsolid\n"
+                   where facets   = Csg.byIndex pa ta
+                         ffacet f =    "  facet normal " ++ fvector (Csg.nnormal f) ++"\n"
+                                    ++ "    outer loop\n"
+                                    ++ foldl1 (++) (map fvertex f)
+                                    ++ "    endloop\n"
+                                    ++ "  endfacet\n"
+                         fvector n = (show$n!!0) ++ " " ++ (show$n!!1) ++ " " ++ (show$n!!2)
+                         fvertex v =   "      vertex " ++ (fvector v) ++ "\n"
+toStl n = toStl $ render n
+
 csgUnion :: Node -> Node -> Node
 csgUnion (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgUnion a b)
 csgInter :: Node -> Node -> Node
