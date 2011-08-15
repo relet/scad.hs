@@ -3,15 +3,36 @@ import Data.Map as M hiding (map, filter, split)
 import Data.Set as S hiding (map, filter, split)
 import Data.List as L hiding (map, filter, intersect)
 import Data.Maybe as Q
-import Debug.Trace (trace)
--- TODO: actually use a matrix library for matrix stuff, tyvm
+-- TODO: actually use a dph for matrix stuff, tyvm
+
+{- test code for profiling 
+main = print $ csgUnion t t2
+t    = torus 5 3 6 6 
+t2   = torus 6 4 6 6
+torus                :: Double -> Double -> Int -> Int -> Polyhedron 
+torus orad irad dt du = fplane (\u-> \v-> [orad * (sin (u*2*pi)) + irad * (sin (v*2*pi)) * (sin (u*2*pi)),
+                                          orad * (cos (u*2*pi)) + irad * (sin (v*2*pi)) * (cos (u*2*pi)),
+                                          irad * (cos (v*2*pi))]   ) (dt+1) (du+1)
+fplane           :: (Double -> Double -> [Double]) -> Int -> Int -> Polyhedron
+fplane fgen dt du = poly
+                     (concatMap (\x-> map (fgen x) t) u)
+                     (concatMap (\i-> [[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]]) [0..length seq1 -1])
+                where t = unit dt
+                      u = unit du
+                      seq1 = [u * dt + t | u<-[0..du-2], t<-[0..dt-2]]
+                      seq2 = map (+1) seq1
+                      seq3 = map (+dt) seq1
+                      seq4 = map (+1) seq3
+unit         :: Int -> [Double]
+unit dt       = [0.0,1.0/(fromIntegral dt-1)..1.0]
+end profiling -} 
 
 type Vector   = [Double]
-type Point    = [Double]
+type Point    = Vector 
 type Polygon  = [Point]
 type Polyset  = [Polygon]
 type Triangle = [Int]
-type Extent   = [[Double]]
+type Extent   = (Point, Point)
 
 data Polyhedron = Polyhedron [Point] [Triangle] Extent -- vertices, polygons, extent
   deriving (Show, Eq, Ord)
@@ -58,7 +79,7 @@ poly p t = Polyhedron p t (extent p)
 
 polyFromList   :: Polyset -> Polyhedron
 polyFromList pp = poly pts tris
-                 where pts  = S.toList $ S.fromList (foldl (++) [] pp) 
+                 where pts  = S.toList $ S.fromList (concat pp) 
                        tris = map (map (\pt-> fromJust (L.elemIndex pt pts))) pp
 
 byIndex  :: [Point] -> [Triangle] -> Polyset 
@@ -68,33 +89,30 @@ nnormal :: Polygon -> Vector
 nnormal tri = norm $ normal tri
 normal  :: Polygon -> Vector
 normal tri  = cross u v 
-              where u = zipWith (-) (tri!!1) (tri!!0)
-                    v = zipWith (-) (tri!!2) (tri!!0)
+              where u = vsub (tri!!1) (tri!!0)
+                    v = vsub (tri!!2) (tri!!0)
 
 extent    :: [Point] -> Extent
-extent pts = [map minimum list, map maximum list]
-             where dim  = length (pts!!0)-1
-                   list = map (\d->map (!!d) pts) [0..dim]
+extent pts = (map minimum list, map maximum list)
+             where list = transpose pts
 
 pairs        :: [Int] -> [(Int,Int)]
 pairs l       = [(x,y) | x<-l, y<-l, x/=y]
 adjacent     :: [[Int]] -> (Map Int (Set Int))
-adjacent tris = foldl (\m-> \p->insertWith (S.union) (fst p) (S.singleton (snd p)) m) M.empty $ foldl (++) [] $ map pairs tris
+adjacent tris = foldl' (\m-> \p->insertWith (S.union) (fst p) (S.singleton (snd p)) m) M.empty $ concatMap pairs tris
 
 -- todo: merge these two
 overlaps     :: Extent -> Extent -> Bool
-overlaps a b  = foldl (&&) True $ (zipWith (<=<) (a!!0) (b!!1)) ++ (zipWith (>=>) (a!!1) (b!!0))
---overlap      :: Extent -> Extent -> Extent
---overlap a b   = [zipWith (max) (a!!0) (b!!0), zipWith (min) (a!!1) (b!!1)]
-overlap        :: [(Double, Point)] -> [(Double, Point)] -> [(Double, Point)]
-overlap a b     = [max (a!!0) (b!!0), min (a!!1) (b!!1)]
+overlaps (a0, a1) (b0, b1) = foldl' (&&) True (zipWith (<=<) a0 b1) && (foldl' (&&) True (zipWith (>=>) a1 b0))
+overlap      :: [(Double, Point)] -> [(Double, Point)] -> [(Double, Point)]
+overlap a b   = [max (a!!0) (b!!0), min (a!!1) (b!!1)]
 
-reverse  :: Polyset -> Polyset
-reverse p = map (L.reverse) p
+lreverse  :: Polyset -> Polyset
+lreverse p = map (L.reverse) p
 
 csgUnion       :: Polyhedron -> Polyhedron -> Polyhedron
 csgUnion (Polyhedron pa ta ea) (Polyhedron pb tb eb)
-                = polyFromList $ nub ( a ++ b ++ c ++ d) 
+                = polyFromList $ nub ( a ++ (b ++ (c ++ d)))
                   where (a, a', b', b) = splitBy ppa ea ppb eb 
                         c           = filter ((\x->(x == Outside) || (x == BoundarySame)).(inOrOut ppb)) a'
                         d           = filter ((==Outside).(inOrOut ppa)) b'
@@ -110,10 +128,10 @@ csgInter (Polyhedron pa ta ea) (Polyhedron pb tb eb)
                         ppb         = byIndex pb tb
 csgDiff       :: Polyhedron -> Polyhedron -> Polyhedron
 csgDiff (Polyhedron pa ta ea) (Polyhedron pb tb eb)
-                = polyFromList $ nub (a ++ c ++ d) 
+                = polyFromList $ nub (a ++ (c ++ d))
                   where (a, a', b', b) = splitBy ppa ea ppb eb 
                         c           = filter ((\x->(x == Outside) || (x == BoundaryOpposite)).(inOrOut ppb)) a'
-                        d           = Csg.reverse $ filter ((==Inside).(inOrOut ppa)) b'
+                        d           = lreverse $ filter ((==Inside).(inOrOut ppa)) b'
                         ppa         = byIndex pa ta
                         ppb         = byIndex pb tb
 
@@ -132,9 +150,9 @@ splitBy ppa ea ppb eb =
                   all_pb      = L.partition (\p->overlaps (extent p) ea) ppb
 
 splitHbyP      :: Polyset -> Polygon -> Polyset -- split all polys in a hedron by a single poly
-splitHbyP as b  = foldl (++) [] (map (snd.(split b)) as) 
+splitHbyP as b  = concatMap (\a -> snd $ split b (extent b) a (extent a)) as 
 splitHbyH      :: Polyset -> Polyset -> Polyset 
-splitHbyH as bs = foldl splitHbyP as bs
+splitHbyH as bs = foldl' splitHbyP as bs
 
 vmul          :: Vector -> Double -> Vector
 vmul v d       = map (*d) v
@@ -150,12 +168,16 @@ norm          :: Vector -> Vector
 norm a          = a `vdiv` (len a)
 dot           :: Vector -> Vector -> Double
 dot a b        = sum (zipWith (*) a b) 
---mmult         :: Num a => [[a]] -> [[a]] -> [[a]] 
---mmult a b      = [[ sum $ zipWith (*) ar bc | bc <- (transpose b) ] | ar <- a ]
 cross         :: Vector -> Vector -> Vector
-cross u v      =[(u!!1) * (v!!2) - (u!!2) * (v!!1),
-                 (u!!2) * (v!!0) - (u!!0) * (v!!2),
-                 (u!!0) * (v!!1) - (u!!1) * (v!!0)] 
+cross u v      =[b * z - c * y,
+                 c * x - a * z,
+                 a * y - b * x] 
+                where a = u!!0
+                      b = u!!1
+                      c = u!!2
+                      x = v!!0
+                      y = v!!1
+                      z = v!!2
 len           :: Vector -> Double
 len v          = sqrt $ dot v v
 avg           :: Polygon -> Point
@@ -167,9 +189,7 @@ dist                :: Plane -> Point -> Double
 dist (Plane n d) pt  = pt `dot` n - d
                         
 intersect     :: Polygon -> Polygon -> Relation
-intersect a b  = if not $ overlaps (extent a) (extent b) then
-                   DoNotIntersect
-                 else case cmp of
+intersect a b  = case cmp of
                   [EQ, EQ, EQ] -> Coplanar
                   [LT, LT, LT] -> DoNotIntersect
                   [GT, GT, GT] -> DoNotIntersect
@@ -185,22 +205,25 @@ intersect a b  = if not $ overlaps (extent a) (extent b) then
                        pb  = plane b
                        sega = interSeg a rela int
                        segb = interSeg b relb int
-                       ext y = map (\x->[fst x]) y 
+                       ext y = ([fst$y!!0], [fst$y!!1])
 
 interLine    :: Plane -> Plane -> Line
-interLine (Plane np dp) (Plane nq dq) = 
-                Line (if   n!!0 =/= 0    then [0] ++ (solve (np!!1) (np!!2) dp (nq!!1) (nq!!2) dq)
-                      else if n!!2 =/= 0 then (solve (np!!0) (np!!1) dp (nq!!0) (nq!!1) dq) ++ [0]
-                      else                  [s3!!0, 0, s3!!1]) n
+interLine (Plane np dp) (Plane nq dq)  
+              | n!!0 =/= 0 = Line [0, s10, s11] n
+              | n!!2 =/= 0 = Line [s20, s21, 0] n
+              | otherwise  = Line [s30, 0, s31] n
                 where n  = cross np nq
-                      s3 = solve (np!!0) (np!!2) dp (nq!!0) (nq!!2) dq
+                      (s10, s11) = solve (np!!1) (np!!2) dp (nq!!1) (nq!!2) dq
+                      (s20, s21) = solve (np!!0) (np!!1) dp (nq!!0) (nq!!1) dq
+                      (s30, s31) = solve (np!!0) (np!!2) dp (nq!!0) (nq!!2) dq
 
 dobq   :: (Ord a) => [a] -> [a]
-dobq v  = if length v == 1 then v++v else v
+dobq v | length v == 1 = v++v 
+       | otherwise     = v
 
 interSeg          :: Polygon -> [Double] -> Line -> [(Double, Point)] 
 interSeg po da l   = dobq $ sort $ plist
-                     where plist = foldl (++) [] ((interSegV po da l) ++ (interSegE po da l))
+                     where plist = concat ((interSegV po da l) ++ (interSegE po da l))
 interSegV         :: Polygon -> [Double] -> Line -> [[(Double, Vector)]]
 interSegV po da (Line p v) = [if da!!i === 0 
                               then [(len $ vsub pi p , pi)]
@@ -239,27 +262,29 @@ inPoly po pt = (u >=> 0) && (v >=> 0) && ((u+v) <=< 1)  -- obviously cloned from
                      p0 = po!!0
 
 trisect      :: Polygon -> Point -> Polyset 
-trisect po pt = filter (not.collinear) $ map (++[pt]) pairs 
-                where pairs = zipWith (\x-> \y-> [x,y]) po (tail po ++ [head po])
+trisect po pt = filter (not.collinear) $ map (pt:) pairs 
+                where pairs = [last po, head po] : zipWith (\x-> \y-> [x,y]) po (tail po)
 subsect      :: Polyset -> Point -> Polyset
 subsect ps pt = if length ps == 1 then
                   trisect (ps!!0) pt
                 else
-                  foldl (++) [] subs
+                  concat subs
                 where subs = map (\po-> if inPoly po pt then trisect po pt else [po]) ps 
 
 -- Note to self: Why lazy evaluation is awesome: 
 -- this method can subsect both polygons, but will do so only if you actually evaluate the results 
-split        :: Polygon -> Polygon -> (Polyset, Polyset)
-split a b     = case intersect a b of 
-                  Intersect (Intersection p l) -> 
-                    (subsect (trisect a (snd$p!!0)) (snd$p!!1),
-                     subsect (trisect b (snd$p!!0)) (snd$p!!1))
-                  _ -> ([a],[b])
+split        :: Polygon -> Extent -> Polygon -> Extent -> (Polyset, Polyset)
+split a ea b eb | (overlaps ea eb) =
+                    case intersect a b of 
+                      Intersect (Intersection p l) -> 
+                        (subsect (trisect a (snd$p!!0)) (snd$p!!1),
+                         subsect (trisect b (snd$p!!0)) (snd$p!!1))
+                      otherwise -> ([a],[b])
+                | otherwise = ([a],[b])
 
-solve            :: Double -> Double -> Double -> Double -> Double -> Double -> [Double]
-solve a b c d e f = [(b*f - c*e) / (-den),
-                     (a*f - c*d) / (den)]
+solve            :: Double -> Double -> Double -> Double -> Double -> Double -> (Double, Double)
+solve a b c d e f = ((b*f - c*e) / (-den),
+                     (a*f - c*d) / (den))
                     where den = (a*e - b*d)
 
 ray          :: Polygon -> Line
@@ -292,3 +317,4 @@ inOrOut pp po = classify $ take 1 $ L.sortBy dabs $ filter (analyze) $ map dispr
                                                 | dxp <<< 0 = Inside
                                                 | pxp >>> 0 = BoundarySame
                                                 | pxp <<< 0 = BoundaryOpposite
+
