@@ -167,11 +167,13 @@ dist                :: Plane -> Point -> Double
 dist (Plane n d) pt  = pt `dot` n - d
                         
 intersect     :: Polygon -> Polygon -> Relation
-intersect a b  = case cmp of
+intersect a b  = if not $ overlaps (extent a) (extent b) then
+                   DoNotIntersect
+                 else case cmp of
                   [EQ, EQ, EQ] -> Coplanar
                   [LT, LT, LT] -> DoNotIntersect
                   [GT, GT, GT] -> DoNotIntersect
-                  other        -> 
+                  otherwise    -> 
                       if (length sega > 0) && (length segb > 0) && (overlaps (ext sega) (ext segb))
                       then Intersect (Intersection over int) else DoNotIntersect
                  where rela = map (dist pb) a

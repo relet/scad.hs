@@ -69,14 +69,14 @@ line fgen dt  = Polygon { points = map fgen t, paths = [[0..(dt-1)]] }
 -- a parametric polyhedron defined by its outline generator function over [0..1.0]^2 in dt,du steps
 plane           :: (Double -> Double -> [Double]) -> Int -> Int -> Node
 plane fgen dt du = Polyhedron (Csg.poly 
-                     (foldl (++) [] $ map (\x-> map (fgen x) u) t)
+                     (foldl (++) [] $ map (\x-> map (fgen x) t) u)
                      (foldl (++) [] [[[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]] | i<-[0..length seq1 -1]]))
                 where t = unit dt
                       u = unit du 
-                      seq1 = [u * dt + t | u<-[0..dt-1], t<-[0..du-1]]
-                      seq2 = tail seq1 ++ [0]
-                      seq3 = drop du seq1 ++ (take du seq1) 
-                      seq4 = map ((`mod`(dt*du)).(+dt)) seq2
+                      seq1 = [u * dt + t | u<-[0..du-2], t<-[0..dt-2]]
+                      seq2 = map (+1) seq1
+                      seq3 = map (+dt) seq1
+                      seq4 = map (+1) seq3
 -- a polygon defined by a bezier curve of arbitrary order and dimension (array size = #points x dimension) 
 bezier       :: [[Double]] -> Int -> Node
 bezier pts dt = line (bezierfn pts) dt 
