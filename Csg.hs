@@ -5,34 +5,6 @@ import Data.List as L hiding (map, filter, intersect)
 import Data.Maybe as Q
 -- TODO: actually use a dph for matrix stuff, tyvm
 
-{- test code for profiling 
-main = print $ csgUnion t t2
-t    = torus 5 3 6 6 
-t2   = torus 6 4 6 6
-torus                :: Double -> Double -> Int -> Int -> Polyhedron 
-torus orad irad dt du = fplane (\u-> \v-> [orad * (sin (u*2*pi)) + irad * (sin (v*2*pi)) * (sin (u*2*pi)),
-                                          orad * (cos (u*2*pi)) + irad * (sin (v*2*pi)) * (cos (u*2*pi)),
-                                          irad * (cos (v*2*pi))]   ) (dt+1) (du+1)
-fplane           :: (Double -> Double -> [Double]) -> Int -> Int -> Polyhedron
-fplane fgen dt du = poly
-                     (concatMap (\x-> map (fgen x) t) u)
-                     (concatMap (\i-> [[seq1!!i, seq2!!i, seq3!!i],[seq2!!i, seq4!!i, seq3!!i]]) [0..length seq1 -1])
-                where t = unit dt
-                      u = unit du
-                      seq1 = [u * dt + t | u<-[0..du-2], t<-[0..dt-2]]
-                      seq2 = map (+1) seq1
-                      seq3 = map (+dt) seq1
-                      seq4 = map (+1) seq3
-unit         :: Int -> [Double]
-unit dt       = [0.0,1.0/(fromIntegral dt-1)..1.0]
-
--- error case
-*Scad> let a = Csg.pgon [[0,0,0],[1,1,0],[0,2,0]]
-*Scad> let b = Csg.pgon [[1,0,0],[2,1,0],[1,2,0]]
-*Scad> Csg.split a b
-
-end profiling -} 
-
 type Vector   = [Double]
 type Point    = Vector 
 type Polyset  = [Polygon]
@@ -115,7 +87,7 @@ adjacent tris = foldl' (\m-> \p->insertWith (S.union) (fst p) (S.singleton (snd 
 
 -- todo: merge these two
 overlaps     :: Extent -> Extent -> Bool
-overlaps (a0, a1) (b0, b1) = foldl' (&&) True (zipWith (<=<) a0 b1) && (foldl' (&&) True (zipWith (>=>) a1 b0))
+overlaps (a0, a1) (b0, b1) = and (zipWith (<=<) a0 b1) && (and (zipWith (>=>) a1 b0))
 overlap      :: [(Double, Point)] -> [(Double, Point)] -> [(Double, Point)]
 overlap a b   = [max (a!!0) (b!!0), min (a!!1) (b!!1)]
 
@@ -297,14 +269,24 @@ subsect ps pt = if length ps == 1 then
                   concat subs
                 where subs = map (\po-> if inPoly po pt then trisect po pt else [po]) ps 
 
--- Note to self: Why lazy evaluation is awesome: 
--- this method can subsect both polygons, but will do so only if you actually evaluate the results 
 split        :: Polygon -> Polygon -> (Polyset, Polyset)
 split a b = if overlaps ea eb then
                case intersect a b of 
                  Intersect (Intersection p l) -> 
                    (subsect (trisect a (snd$p!!0)) (snd$p!!1),
                     subsect (trisect b (snd$p!!0)) (snd$p!!1))
+                 Coplanar -> 
+                   let abyb = if any (inPoly a) pb then
+                                foldl splitHbyP [a] (shuffles b (pnormal plb))
+                              else [a]
+                       bbya = if any (inPoly b) pa then
+                                 foldl splitHbyP [b] (shuffles a (pnormal pla))
+                              else [b]
+                       shuffles (P p pp pe) n = map pgon
+                                      [head p `vadd` n : tail p, 
+                                       [head p, p!!1 `vadd` n, last p],
+                                       last p `vadd` n : init p]
+                   in  (abyb, bbya)
                  otherwise -> ([a],[b])
              else ([a],[b])
              where (P pa pla ea) = a
