@@ -25,11 +25,16 @@ fplane fgen dt du = poly
                       seq4 = map (+1) seq3
 unit         :: Int -> [Double]
 unit dt       = [0.0,1.0/(fromIntegral dt-1)..1.0]
+
+-- error case
+*Scad> let a = Csg.pgon [[0,0,0],[1,1,0],[0,2,0]]
+*Scad> let b = Csg.pgon [[1,0,0],[2,1,0],[1,2,0]]
+*Scad> Csg.split a b
+
 end profiling -} 
 
 type Vector   = [Double]
 type Point    = Vector 
---type Polygon  = [Point]
 type Polyset  = [Polygon]
 type Triangle = [Int]
 type Extent   = (Point, Point)
