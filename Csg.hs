@@ -1,11 +1,11 @@
---module Csg where
+module Csg where
 import Data.Map as M hiding (map, filter, split)
 import Data.Set as S hiding (map, filter, split)
 import Data.List as L hiding (map, filter, intersect)
 import Data.Maybe as Q
 -- TODO: actually use a dph for matrix stuff, tyvm
 
-{- test code for profiling -}
+{- test code for profiling 
 main = print $ csgUnion t t2
 t    = torus 5 3 6 6 
 t2   = torus 6 4 6 6
@@ -25,7 +25,7 @@ fplane fgen dt du = poly
                       seq4 = map (+1) seq3
 unit         :: Int -> [Double]
 unit dt       = [0.0,1.0/(fromIntegral dt-1)..1.0]
-{- end profiling -} 
+end profiling -} 
 
 type Vector   = [Double]
 type Point    = Vector 
@@ -60,7 +60,7 @@ other_po  = [[0::Double,0,1],[0,1,0],[1,0,0]]
 precision :: Double
 precision  = 0.00001
 (===)    :: Double -> Double -> Bool
-a === b   = abs(a-b) < precision 
+a === b   = abs(a-b) < precision
 (=/=)    :: Double -> Double -> Bool
 a =/= b   = not $ a === b 
 (<<<)     :: Double -> Double -> Bool
@@ -179,7 +179,8 @@ vadd a b       = zipWith (+) a b
 norm          :: Vector -> Vector
 norm a          = a `vdiv` (len a)
 dot           :: Vector -> Vector -> Double
-dot a b        = sum (zipWith (*) a b) 
+dot [] []  = 0
+dot (x:xs) (y:ys) = x*y + dot xs ys
 cross         :: Vector -> Vector -> Vector
 cross u v      =[b * z - c * y,
                  c * x - a * z,
@@ -191,7 +192,9 @@ cross u v      =[b * z - c * y,
                       y = v!!1
                       z = v!!2
 len           :: Vector -> Double
-len v          = sqrt $ dot v v
+len v          = sqrt $ len2 v
+len2          :: Vector -> Double
+len2 v         = dot v v
 avg           :: [Point] -> Point
 avg po         = vdiv (foldl1 vadd po) 3
 dnull         :: [Point] -> Vector -> Double
@@ -241,7 +244,7 @@ interSeg po da l   = dobq $ sort $ plist
 interSegV         :: Polygon -> [Double] -> Line -> [[(Double, Vector)]]
 interSegV (P po pp pe) da (Line p v) = 
                              [if da!!i === 0 
-                              then [(len $ vsub pi p , pi)]
+                              then [(len $ vsub pi p, pi)]
                               else [] 
                              | i<-[0..2], 
                                let pi = po!!i
@@ -260,7 +263,7 @@ interSegE (P po pp pe) da (Line p v) =
                              ]
 
 collinear    :: Polygon -> Bool
-collinear (P po pp pe) = len (normal po) === 0
+collinear (P po pp pe) = len2 (normal po) === 0
 
 inPoly      :: Polygon -> Point -> Bool          -- including boundaries
 inPoly (P po pp pe) pt = 
@@ -268,10 +271,10 @@ inPoly (P po pp pe) pt =
                where u = (d11 * d02 - d01 * d12) * inv
                      v = (d00 * d12 - d01 * d02) * inv
                      inv = 1 / (d00 * d11 - d01 * d01)
-                     d00 = v0 `dot` v0
+                     d00 = len2 v0
                      d01 = v0 `dot` v1
                      d02 = v0 `dot` v2
-                     d11 = v1 `dot` v1
+                     d11 = len2 v1
                      d12 = v1 `dot` v2
                      v0 = (po!!2) `vsub` p0
                      v1 = (po!!1) `vsub` p0

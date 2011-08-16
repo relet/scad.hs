@@ -229,7 +229,8 @@ toStl (Polyhedron (Csg.Polyhedron pa ta ea)) =
                    ++ foldl (++) "" (map ffacet facets)
                    ++ "endsolid\n"
                    where facets   = Csg.byIndex pa ta
-                         ffacet f =    "  facet normal " ++ fvector (Csg.nnormal f) ++"\n"
+                         ffacet (Csg.P f _ _) =
+                                       "  facet normal " ++ fvector (Csg.nnormal f) ++"\n"
                                     ++ "    outer loop\n"
                                     ++ foldl1 (++) (map fvertex f)
                                     ++ "    endloop\n"
