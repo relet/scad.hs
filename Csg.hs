@@ -29,9 +29,6 @@ data Plane = Plane Vector Double -- unit normal, distance
 cube_pts  = [[0::Double,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
 cube_tris = [[0::Int,1,2],[1,4,2],[0,3,1],[3,5,1],[0,2,3],[3,2,6],[3,6,5],[5,6,7],[5,7,4],[4,1,5],[2,7,6],[7,2,4]]
 cube      = poly cube_pts cube_tris
-cube2     = poly (map (vadd [0.5,0.5,0.5]) cube_pts) cube_tris
-cube3     = poly (map (vadd [0.5,1,0.5])   cube_pts) cube_tris
-other_po  = [[0::Double,0,1],[0,1,0],[1,0,0]]
 
 -- to compensate for floating point errors we compare but roughly, in dubio pro equality
 precision :: Double
