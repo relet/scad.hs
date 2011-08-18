@@ -28,6 +28,9 @@ data Plane = Plane Vector Double -- unit normal, distance
 
 cube_pts  = [[0::Double,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
 cube_tris = [[0::Int,1,2],[1,4,2],[0,3,1],[3,5,1],[0,2,3],[3,2,6],[3,6,5],[5,6,7],[5,7,4],[4,1,5],[2,7,6],[7,2,4]]
+--is this the better cube?
+--cube_pts  = [[0::Double,0.0,0.0],[0.0,0.0,1.0],[0.0,1.0,0.0],[0.0,1.0,1.0],[1.0,0.0,0.0],[1.0,0.0,1.0],[1.0,1.0,0.0],[1.0,1.0,1.0]] 
+--cube_tris = [[2::Int,1,0],[2,3,1],[1,4,0],[1,5,4],[4,2,0],[6,2,4],[5,6,4],[7,6,5],[3,7,5],[5,1,3],[6,7,2],[3,2,7]]
 cube      = poly cube_pts cube_tris
 
 -- to compensate for floating point errors we compare but roughly, in dubio pro equality
@@ -311,11 +314,16 @@ pplane  (P _ p _)   = p
 debug   :: (Show a) => String -> a -> a
 debug msg a  = trace ("["++msg++"] "++(show a)++"\n") a
 
+type RelVector = (Double, Double, Double, Polygon)
 fixOrientation    :: Polyset -> Polyset
 fixOrientation pp  = a ++ (lreverse b)
                      where (a,b) = L.partition (hitsEven pp) pp 
-                           hitsEven ps p = let r = ray p in even $ length $ filter (analyze r) $ map (relVector r) pp 
-type RelVector = (Double, Double, Double, Polygon)
+                           hitsEven ps p = let r = ray p in even $ length $ nub $ map fst4 $ filter (analyze r) $ map (relVector r) pp 
+                           fst4 (a,_,_,_) = a
+
+fixOrientation'   :: Polyhedron -> Polyhedron
+fixOrientation' (Polyhedron pp pt pe)  = polyFromList $ fixOrientation $ byIndex pp pt
+
 -- calculate all the distances needed to identify the position of a polygon relative to a ray
 relVector    :: Line -> Polygon -> RelVector 
 relVector r (P px plx ex) = (distPL plx (px!!0) r, dist plx bary, rn `dot` (pnormal plx), (P px plx ex)) 
