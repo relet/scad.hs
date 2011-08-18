@@ -4,7 +4,6 @@ import Data.Set as S hiding (map, filter, split)
 import Data.List as L hiding (map, filter, intersect)
 import Data.Maybe as Q
 import Debug.Trace
--- TODO: actually use a dph for matrix stuff, tyvm
 
 type Vector   = [Double]
 type Point    = Vector 
@@ -319,7 +318,7 @@ fixOrientation pp  = a ++ (lreverse b)
 type RelVector = (Double, Double, Double, Polygon)
 -- calculate all the distances needed to identify the position of a polygon relative to a ray
 relVector    :: Line -> Polygon -> RelVector 
-relVector r (P px plx ex) = (distPL plx (px!!0) r, dist plx bary, rn `dot` (pnormal plx), (P px plx ex)) -- todo: memoize plane p / extract normal p 
+relVector r (P px plx ex) = (distPL plx (px!!0) r, dist plx bary, rn `dot` (pnormal plx), (P px plx ex)) 
                               where (Line bary rn) = r
 
 
