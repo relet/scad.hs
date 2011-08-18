@@ -30,9 +30,6 @@ data Plane = Plane Vector Double -- unit normal, distance
 cube_pts  = [[0::Double,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
 cube_tris = [[0::Int,1,2],[1,4,2],[0,3,1],[3,5,1],[0,2,3],[3,2,6],[3,6,5],[5,6,7],[5,7,4],[4,1,5],[2,7,6],[7,2,4]]
 cube      = poly cube_pts cube_tris
-pts2      = map (\p -> [(0.5::Double) + 0.5 * (sin $ angle p + pi/4), 0.5 + 0.5 * (cos $ angle p + pi/4), p!!2]) cube_pts
-            where angle p = atan2 (p!!1-0.5) (p!!0-0.5)
-
 
 -- to compensate for floating point errors we compare but roughly, in dubio pro equality
 precision :: Double
@@ -315,25 +312,38 @@ pplane  (P _ p _)   = p
 debug   :: (Show a) => String -> a -> a
 debug msg a  = trace ("["++msg++"] "++(show a)++"\n") a
 
+fixOrientation    :: Polyset -> Polyset
+fixOrientation pp  = a ++ (lreverse b)
+                     where (a,b) = L.partition (hitsEven pp) pp 
+                           hitsEven ps p = let r = ray p in even $ length $ filter (analyze r) $ map (relVector r) pp 
+type RelVector = (Double, Double, Double, Polygon)
+-- calculate all the distances needed to identify the position of a polygon relative to a ray
+relVector    :: Line -> Polygon -> RelVector 
+relVector r (P px plx ex) = (distPL plx (px!!0) r, dist plx bary, rn `dot` (pnormal plx), (P px plx ex)) -- todo: memoize plane p / extract normal p 
+                              where (Line bary rn) = r
+
+
 inOrOut      :: Polyset -> Polygon -> Status 
-inOrOut pp po = classify $ take 1 $ L.sortBy dabs $ filter (analyze) $ map dispro pp 
+inOrOut pp po = classify $ take 1 $ L.sortBy dabs $ filter (analyze r) $ map (relVector r) pp 
                 where
                   r              = ray po
-                  (Line bary rn) = r
                   dabs (a,_,_,_) (e,_,_,_) = compare (abs a) (abs e)
-                  dispro (P px plx ex) = (distPL plx (px!!0) r, dist plx bary, rn `dot` (pnormal plx), (P px plx ex)) -- todo: memoize plane p / extract normal p 
-                  analyze (dis, _, pro, p) | dis <<< 0              = False
-                                           | isNaN dis              = False
-                                           | dis >>> 0 && pro === 0 = False
-                                           | dis === 0 && pro =/= 0 = inPoly p bary
-                                           | dis >>> 0 && pro =/= 0 = inPoly p (intPt (Line bary rn) dis)
-                                           | dis === 0 && pro === 0 = let (Line bary' rn') = perturb (Line bary rn)
-                                                                          dis' = dist (pplane p) bary'
-                                                                          pro' = rn' `dot` (pnormal$pplane p)
-                                                                      in  analyze (dis', 0, pro', p)
-                  classify []             = Outside
-                  classify ((_, dxp, pxp, p):_) | dxp >>> 0 = Outside
-                                                | dxp <<< 0 = Inside
-                                                | pxp >>> 0 = BoundarySame
-                                                | pxp <<< 0 = BoundaryOpposite
 
+analyze :: Line -> RelVector -> Bool
+analyze (Line bary rn) (dis, _, pro, p) 
+                           | dis <<< 0              = False
+                           | isNaN dis              = False
+                           | dis >>> 0 && pro === 0 = False
+                           | dis === 0 && pro =/= 0 = inPoly p bary
+                           | dis >>> 0 && pro =/= 0 = inPoly p (intPt (Line bary rn) dis)
+                           | dis === 0 && pro === 0 = let (Line bary' rn') = perturb (Line bary rn)
+                                                          dis' = dist (pplane p) bary'
+                                                          pro' = rn' `dot` (pnormal$pplane p)
+                                                      in  analyze (Line bary rn) (dis', 0, pro', p) 
+
+classify :: [RelVector] -> Status
+classify []             = Outside
+classify ((_, dxp, pxp, p):_) | dxp >>> 0 = Outside
+                              | dxp <<< 0 = Inside
+                              | pxp >>> 0 = BoundarySame
+                              | pxp <<< 0 = BoundaryOpposite
