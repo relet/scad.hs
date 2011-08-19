@@ -26,11 +26,8 @@ data Line = Line Point Vector -- arbitrary point and unit direction vector
 data Plane = Plane Vector Double -- unit normal, distance
   deriving (Show, Eq, Ord)
 
-cube_pts  = [[0::Double,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
-cube_tris = [[0::Int,1,2],[1,4,2],[0,3,1],[3,5,1],[0,2,3],[3,2,6],[3,6,5],[5,6,7],[5,7,4],[4,1,5],[2,7,6],[7,2,4]]
---is this the better cube?
---cube_pts  = [[0::Double,0.0,0.0],[0.0,0.0,1.0],[0.0,1.0,0.0],[0.0,1.0,1.0],[1.0,0.0,0.0],[1.0,0.0,1.0],[1.0,1.0,0.0],[1.0,1.0,1.0]] 
---cube_tris = [[2::Int,1,0],[2,3,1],[1,4,0],[1,5,4],[4,2,0],[6,2,4],[5,6,4],[7,6,5],[3,7,5],[5,1,3],[6,7,2],[3,2,7]]
+cube_pts  = [[0::Double,0.0,0.0],[0.0,0.0,1.0],[0.0,1.0,0.0],[0.0,1.0,1.0],[1.0,0.0,0.0],[1.0,0.0,1.0],[1.0,1.0,0.0],[1.0,1.0,1.0]] 
+cube_tris = [[0,1,2],[1,3,2],[0,4,1],[4,5,1],[0,2,4],[4,2,6],[4,6,5],[5,6,7],[5,7,3],[3,1,5],[2,7,6],[7,2,3]]
 cube      = poly cube_pts cube_tris
 
 -- to compensate for floating point errors we compare but roughly, in dubio pro equality
@@ -97,7 +94,7 @@ lreverse p = map reversePoly p
 
 csgUnion       :: Polyhedron -> Polyhedron -> Polyhedron
 csgUnion (Polyhedron pa ta ea) (Polyhedron pb tb eb)
-                = polyFromList $ nub ( a ++ (b ++ (c ++ d)))
+                = polyFromList $ nub (a ++ (b ++ (c ++ d)))
                   where (a, a', b', b) = splitBy ppa ea ppb eb 
                         c           = filter ((\x->(x == Outside) || (x == BoundarySame)).(inOrOut ppb)) a'
                         d           = filter ((==Outside).(inOrOut ppa)) b'
@@ -312,13 +309,13 @@ pplane  :: Polygon -> Plane
 pplane  (P _ p _)   = p
 
 debug   :: (Show a) => String -> a -> a
-debug msg a  = trace ("["++msg++"] "++(show a)++"\n") a
+debug msg a  = trace ("\n["++msg++"] "++(show a)++"\n") a
 
 type RelVector = (Double, Double, Double, Polygon)
 fixOrientation    :: Polyset -> Polyset
 fixOrientation pp  = a ++ (lreverse b)
-                     where (a,b) = L.partition (hitsEven pp) pp 
-                           hitsEven ps p = let r = ray p in even $ length $ nub $ map fst4 $ filter (analyze r) $ map (relVector r) pp 
+                     where (a,b) = L.partition (hitsOdd pp) pp 
+                           hitsOdd ps p = let r = ray p in odd $ length $ nub $ map fst4 $ filter (analyze r) $ map (relVector r) pp 
                            fst4 (a,_,_,_) = a
 
 fixOrientation'   :: Polyhedron -> Polyhedron

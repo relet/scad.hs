@@ -101,9 +101,12 @@ bicubic pts dt  = Polygon { points = foldl (++) [] (map (\g -> map (bezierfn g) 
                         sets = (length pts-1) `div` 3
 -- a torus polyhedron of radius orad +- irad with resolution dt, du
 torus                :: Double -> Double -> Int -> Int -> Node
-torus orad irad dt du = plane (\u-> \v-> [orad * (sin (u*2*pi)) + irad * (sin (v*2*pi)) * (sin (u*2*pi)), 
+torus orad irad dt du = fixOrientation $ 
+                        plane (\u-> \v-> [orad * (sin (u*2*pi)) + irad * (sin (v*2*pi)) * (sin (u*2*pi)), 
                                           orad * (cos (u*2*pi)) + irad * (sin (v*2*pi)) * (cos (u*2*pi)), 
                                           irad * (cos (v*2*pi))]   ) (dt+1) (du+1)
+fixOrientation               :: Node -> Node 
+fixOrientation (Polyhedron p) = Polyhedron (Csg.fixOrientation' p)
 
 
 -- 2D       
@@ -216,8 +219,10 @@ showKids   k        = foldl (\c -> \line -> c ++ line ++ "\n") "" (map show k)
 showDouble         :: Double -> String
 showDouble f        = printf "%.3f" f
 showVector         :: [Double] -> String
+showVector []       = "[]"
 showVector x        = "[" ++ (foldl1 (\x-> \y-> x ++ "," ++ y) (map showDouble x)) ++ "]"
 showVector'        :: [[Double]] -> String
+showVector' []      = "[]"
 showVector' x       = "[" ++ (foldl1 (\x-> \y-> x ++ "," ++ y) (map showVector x)) ++ "]"
 showLayer  l        = if l /= "" then ", layer=" ++ (show l) else ""
 showTwist  t        = if t /= 0  then ", twist=" ++ (show t) else ""
@@ -246,9 +251,11 @@ csgInter (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgInter a b)
 csgDiff  :: Node -> Node -> Node
 csgDiff  (Polyhedron a) (Polyhedron b) = Polyhedron (Csg.csgDiff a b)
 csgScale :: (Double, Double, Double) -> Node -> Node
-csgScale (x,y,z) (Polyhedron (Csg.Polyhedron p t e)) = Polyhedron (Csg.Polyhedron (map (Csg.vmulv [x,y,z]) p) t e)
+csgScale (x,y,z) (Polyhedron (Csg.Polyhedron p t e)) = Polyhedron (Csg.Polyhedron p' t (Csg.extent p'))
+                                                       where p' = map (Csg.vmulv [x,y,z]) p
 csgTrans :: (Double, Double, Double) -> Node -> Node
-csgTrans (x,y,z) (Polyhedron (Csg.Polyhedron p t e)) = Polyhedron (Csg.Polyhedron (map (Csg.vadd [x,y,z]) p) t e)
+csgTrans (x,y,z) (Polyhedron (Csg.Polyhedron p t e)) = Polyhedron (Csg.Polyhedron p' t (Csg.extent p'))
+                                                       where p' = map (Csg.vadd [x,y,z]) p
 -- simplify any given node hierarchy to a single polyhedron
 render  :: Node -> Node 
 render (Polyhedron p) = Polyhedron p
